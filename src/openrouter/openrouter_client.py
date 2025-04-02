@@ -1,5 +1,5 @@
-from ..domain.entities import LLMMessage
-from .. api.openrouter_api import OpenRouterAPI
+from .entities import LLMMessage
+from openrouter_api import OpenRouterAPI
 
 class OpenRouterClient:
     """
