@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 import json
 
-from ..domain.entities import LLMMessage
+from entities import LLMMessage
 
 class OpenRouterAPI:
     """OpenRouter APIとの通信を担当するクラス"""
