@@ -2,7 +2,7 @@ from ..entity.message import Message, Role
 from ..port.message_repo import MessageRepository
 from ..port.llm_service import LLMService
 
-class LLMInteractionUC:
+class LLMInteraction:
     def __init__(
         self,
         llm_service: LLMService,
