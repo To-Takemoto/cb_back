@@ -1,56 +1,43 @@
-from ..entity.message import Message, Role
-from ..port.message_repo import MessageRepository
-from ..port.llm_service import LLMService
+from ...entity.message_entity import MessageEntity, Role
+from ...port.chat_repo import ChatRepository
+from ...port.llm_client import LLMClient
+from .structure_handler import StructureHandle
 
-class LLMInteraction:
+class ChatInteraction:
     def __init__(
         self,
-        llm_service: LLMService,
-        message_repository: MessageRepository|None = None,
+        chat_repo: ChatRepository,
+        llm_client: LLMClient,
         ) -> None:
-        self.llm_service = llm_service
-        self.message_repository = message_repository
+        """ """
+        self.chat_repo = chat_repo
+        self.llm_client = llm_client
+        self.structure_handler = StructureHandle(self.chat_repo)
+
+    def start_new_chat(self, initial_strings: str = None) -> None:
+        initial_message = MessageEntity(None, None, Role.SYSTEM, initial_strings)
+        new_tree = self.chat_repo.init_structure(initial_message)
+        self.structure_handler.store_tree(new_tree)
+        self.structure_handler.set_latest()
+
+    async def continue_chat(self, user_message_strings: str) -> MessageEntity:
+        user_message = MessageEntity(None, None, Role.USER, user_message_strings)
+        filled_user_message = self.chat_repo.save_message(self.structure_handler.chat_tree.uuid, user_message)
+        self.structure_handler.append_message(filled_user_message)
+        self.chat_repo.update_tree(self.structure_handler.chat_tree)
+        fllatten_chat_history_uuid = self.structure_handler.get_current_path()
+        flatten_chat_history = self.chat_repo.get_history(fllatten_chat_history_uuid)
+        async with self.llm_client:
+            llm_message, full_data = await self.llm_client.complete_message(flatten_chat_history)
+        filled_llm_message = self.chat_repo.save_message(self.structure_handler.chat_tree.uuid, llm_message, full_data)
+        self.structure_handler.append_message(filled_llm_message)
+        self.chat_repo.update_tree(self.structure_handler.chat_tree)
+        return filled_llm_message
     
-    async def send_and_receive_message(
-        self,
-        prompt_message: str,
-        conversation_id: str|None = None,
-        ) -> Message:
-        """
-        メッセージを送信し、LLMからの返答を取得する。
-        
-        Args:
-            prompt_message: 送信するメッセージ
-            conversation_id: 会話ID（Noneの場合は履歴を使用しない）
-            
-        Returns:
-            LLMからの応答メッセージ
-        """
-        # メッセージの保存とリポジトリからの会話履歴取得
-        history: list[Message] = []
-        message = Message(None, None, Role.USER, prompt_message)
-        if self.message_repository and conversation_id:
-            try:
-                saved_message = await self.message_repository.save(message, conversation_id)
-                history = await self.message_repository.get_conversation_history(conversation_id)
-                history.append(saved_message)
-            except Exception as e:
-                raise e
-        else:
-            # リポジトリがない場合は単一メッセージのみ使用
-            history = [message]
-            
-        # LLMとの通信
-        try:
-            async with self.llm_service:
-                completed_message = await self.llm_service.send_message(history)
-            
-            # レスポンスの保存
-            if self.message_repository and conversation_id:
-                saved_completed_message = await self.message_repository.save(completed_message, conversation_id)
-                return saved_completed_message
-            return completed_message
-        except Exception as e:
-            # LLM通信エラーの処理
-            print(f"Error communicating with LLM: {e}")
-            raise  # 必要に応じて適切な例外に変換
+    def restart_chat(self, chat_uuid: str):
+        #print(self.chat_repo.load_tree(chat_uuid))
+        self.structure_handler.store_tree(self.chat_repo.load_tree(chat_uuid))
+        self.structure_handler.set_latest()
+
+    def select_message(self, message_uuid):
+        self.structure_handler.select_node(message_uuid)
