@@ -2,7 +2,7 @@ import os
 import httpx
 from dotenv import load_dotenv
 
-from ..entity.message import Message, Role
+from ..entity.message_entity import MessageEntity, Role
 
 class OpenRouterLLMService:
     """OpenRouter APIと連携するLLMサービスの実装"""
@@ -14,7 +14,7 @@ class OpenRouterLLMService:
     def __init__(
         self,
         api_key: str = None,
-        default_model: str = "anthropic/claude-3-haiku"
+        default_model: str = "openai/gpt-3.5-turbo"
     ):
         """
         OpenRouterLLMService のコンストラクタ
@@ -63,7 +63,7 @@ class OpenRouterLLMService:
         self.model = model_name
     
     @staticmethod
-    def _convert_to_api_messages(messages: list[Message]) -> list[dict]:
+    def _convert_to_api_messages(messages: list[MessageEntity]) -> list[dict]:
         """
         Message型からOpenRouter APIが期待する形式に変換する
         
@@ -80,32 +80,16 @@ class OpenRouterLLMService:
             }
             for message in messages
         ]
-    
-    @staticmethod
-    def _extract_content_from_response(response_data: dict) -> str:
-        """
-        OpenRouter APIのレスポンスからコンテンツを抽出する
         
-        Args:
-            response_data: OpenRouter APIからのレスポンスデータ
-            
-        Returns:
-            応答テキスト
+    async def complete_message(self, messages: list[MessageEntity]) -> tuple[MessageEntity, dict]:
         """
-        try:
-            return response_data["choices"][0]["message"]["content"]
-        except (KeyError, IndexError) as e:
-            raise ValueError(f"OpenRouter API レスポンスの解析に失敗しました: {e}, レスポンス: {response_data}")
-        
-    async def send_message(self, messages: list[Message]) -> Message:
-        """
-        メッセージリストをLLMに送信し、応答テキストを取得する
+        メッセージリストをLLMに送信し、応答テキストとメタデータを含む生のレスポンスを取得する
         
         Args:
             messages: 送信するメッセージのリスト
             
         Returns:
-            LLMからの応答メッセージ
+            (LLMからの応答メッセージ, 生のレスポンスデータ)のタプル
         
         注意:
             この実装では、返却するMessageオブジェクトのid, uuidフィールドには
@@ -116,7 +100,6 @@ class OpenRouterLLMService:
         
         # Message型からOpenRouter APIが期待する形式に変換
         formatted_messages = self._convert_to_api_messages(messages)
-        
         # リクエストデータの構築
         data = {
             "model": self.model,
@@ -124,39 +107,30 @@ class OpenRouterLLMService:
             "temperature": 0.7,  # デフォルト値
             "max_tokens": 1000   # デフォルト値
         }
-        
-        # クライアントの初期化（コンテキストマネージャの外で使用される場合）
-        should_close_client = False
+        # クライアントの存在確認
         if not self.client:
-            self.client = httpx.AsyncClient()
-            should_close_client = True
-            
+            raise RuntimeError("このクラスはコンテキストマネージャとしてのみ使用できます。'async with'構文を使用してください。")
         try:
             response = await self.client.post(
                 url, 
                 headers=self.headers, 
                 json=data,
-                timeout=60.0
             )
             response.raise_for_status()  # エラーが発生した場合は例外を発生させる
             response_data = response.json()
-            
             # 応答からコンテンツを抽出
-            content = self._extract_content_from_response(response_data)
+            try:
+                content = response_data["choices"][0]["message"]["content"]
+            except (KeyError, IndexError) as e:
+                raise ValueError(f"OpenRouter API レスポンスの解析に失敗しました: {e}, レスポンス: {response_data}")
             
-            # インフラ層では、id, uuidの生成は行わない
-            # これはリポジトリパターンに従うと、アプリケーション層かドメインサービス層で行うべき
-            # ダミー値を返すことも可能だが、ここでは明示的にidとuuidを設定せず
-            # ある種の"不完全"なオブジェクトを返す
-            return Message(
+            message = MessageEntity(
                 id=-1,  # ダミー値、上位層で適切に設定される必要がある
-                uuid="",  # ダミー値、上位層で適切に設定される必要がある
+                uuid=None,  # ダミー値、上位層で適切に設定される必要がある
                 role=Role.ASSISTANT,
                 content=content
             )
+            return message, response_data
             
         except Exception as e:
             raise e
-        finally:
-            if should_close_client and self.client:
-                await self.client.aclose()
