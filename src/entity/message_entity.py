@@ -9,7 +9,7 @@ class Role(str, Enum):
     SYSTEM = "system"
 
 @dataclass
-class Message:
+class MessageEntity:
     id: int
     uuid: str
     role: Role
