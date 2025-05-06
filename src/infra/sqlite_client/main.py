@@ -8,23 +8,22 @@ from .peewee_models import Message as mm
 
 
 class SqliteClient:
-    def __init__(self, owner: User = None):
+    def __init__(self, user_id: int):
         db = SqliteDatabase("data/sqlite.db")
         db_proxy.initialize(db)
-        if not owner:
-            self.owner = User.get_by_id(1)
-        else:
-            self.owner = owner
+        self.user = User.get_by_id(user_id)
 
     def save_message(
             self,
-            discussion_structure: DiscussionStructure,
-            message: MessageEntity
+            discussion_structure_uuid: str,
+            message: MessageEntity,
+            llm_detail: dict = None
             ) -> MessageEntity:
         "面倒で一部未実装。"
+        target_structure = DiscussionStructure.get(DiscussionStructure.uuid == discussion_structure_uuid)
         query = {
-            "discussion": discussion_structure,
-            "owner": self.owner,
+            "discussion": target_structure,
+            "owner": self.user,
             "uuid": uuidGen.uuid4(),
             "role": message.role.value,
             "content": message.content,
@@ -36,7 +35,7 @@ class SqliteClient:
             role = self.evaluate_role(inserted_message.role),
             content = inserted_message.content
             )
-        if message.role == Role.ASSISTANT:
+        if message.role == Role.ASSISTANT and llm_detail:
             pass#ここにllmのメッセージの詳細を突っ込むロジックを用意すべき。
         return filled_message_entity
         
@@ -45,19 +44,21 @@ class SqliteClient:
         "これダメだろ、ほんとは。"
         if role == "user":
             return Role.USER
-        if role == "assistant":
+        elif role == "assistant":
             return Role.ASSISTANT
-        if role == "system":
+        elif role == "system":
             return Role.SYSTEM
+        else:
+            raise ValueError(f"想定外のrole;{role}が渡されました。")
 
     def init_structure(self, initial_message: MessageEntity) -> ChatTree:
         query = {
-            "owner": self.owner,
+            "owner": self.user,
             "uuid": uuidGen.uuid4(),
             "structure": "何もなし。"
         }
         null_strucuture:DiscussionStructure = DiscussionStructure.create(**query)
-        saved_message = self.save_message(null_strucuture, initial_message)
+        saved_message = self.save_message(null_strucuture.uuid, initial_message)
         #pickleなんかを用いてORDBみたいに使い、nodemixinで作られたtreeをいい感じに保存する必要がある。
         new_tree = ChatTree(
             id = null_strucuture.id,
@@ -70,7 +71,6 @@ class SqliteClient:
 
         return new_tree
         
-
     def load_tree(self, uuid: str) -> ChatTree:
         target_tree_record:DiscussionStructure = DiscussionStructure.get(DiscussionStructure.uuid == uuid)
         target_tree = ChatTree(
@@ -87,3 +87,78 @@ class SqliteClient:
         previous_tree: DiscussionStructure = DiscussionStructure.get(DiscussionStructure.uuid == tree_uuid)
         previous_tree.structure = tree_bin
         previous_tree.save()
+
+    def get_latest_message_by_discussion(self, discussion_uuid: str) -> MessageEntity:
+        """
+        指定されたdiscussion_uuidに属する最も作成日時が新しいメッセージを取得し、
+        MessageEntityとして返します。
+        
+        Args:
+            discussion_uuid: 取得対象となるディスカッションのUUID
+            
+        Returns:
+            MessageEntity: 最新のメッセージエンティティ
+            
+        Raises:
+            DoesNotExist: 該当するディスカッションが存在しない場合や、
+                        メッセージが存在しない場合に発生します。
+        """
+        # 対象のディスカッション構造を取得
+        target_structure = DiscussionStructure.get(DiscussionStructure.uuid == discussion_uuid)
+        
+        # 該当するディスカッションで最新のメッセージを取得
+        latest_message = (mm
+                        .select()
+                        .where(mm.discussion == target_structure)
+                        .order_by(mm.created_at.desc())
+                        .first())
+        
+        if latest_message is None:
+            raise mm.DoesNotExist("指定されたディスカッションにメッセージが存在しません。")
+        
+        # MessageEntityに変換して返す
+        return MessageEntity(
+            id=latest_message.id,
+            uuid=latest_message.uuid,
+            role=self.evaluate_role(latest_message.role),
+            content=latest_message.content
+    )
+
+    def get_history(self, message_uuids: list[str]) -> list[MessageEntity]:
+        """
+        指定されたUUIDのリストに対応するメッセージを取得し、
+        MessageEntityのリストとして返します。
+        
+        Args:
+            message_uuids: 取得対象となるメッセージUUIDのリスト
+            
+        Returns:
+            list[MessageEntity]: MessageEntityのリスト（UUIDリストと同じ順序で返される）
+            
+        Note:
+            存在しないUUIDが含まれる場合、そのメッセージはスキップされます。
+        """
+        # 結果格納用のリスト
+        result_entities = []
+        
+        for uuid in message_uuids:
+            try:
+                # UUIDに対応するメッセージを取得
+                message = mm.get(mm.uuid == uuid)
+                
+                # MessageEntityに変換
+                message_entity = MessageEntity(
+                    id=message.id,
+                    uuid=message.uuid,
+                    role=self.evaluate_role(message.role),
+                    content=message.content
+                )
+                
+                # 結果リストに追加
+                result_entities.append(message_entity)
+                
+            except mm.DoesNotExist:
+                # 該当するUUIDのメッセージが存在しない場合はスキップ
+                continue
+        
+        return result_entities
