@@ -1,10 +1,10 @@
 from typing import Protocol#, AsyncIterable
-from ..entity.message import Message
+from ..entity.message_entity import MessageEntity
 
-class LLMService(Protocol):
+class LLMClient(Protocol):
     """LLMサービスとの通信を抽象化するインターフェース"""
     
-    async def send_message(self, messages: list[Message]) -> Message:
+    async def complete_message(self, messages: list[MessageEntity]) -> tuple[MessageEntity, dict]:
         """
         メッセージリストをLLMに送信し、応答テキストを取得する
         
@@ -14,21 +14,7 @@ class LLMService(Protocol):
         Returns:
             LLMからの応答メッセージ
         """
-    
-    # ストリーミング関連のメソッド (必要に応じて実装)
-    # async def stream_messages(self, messages: list[Message]) -> AsyncIterator[str]:
-    #     """
-    #     メッセージリストをLLMに送信し、応答をストリーミングで取得する
-        
-    #     Args:
-    #         messages: 送信するメッセージのリスト
-            
-    #     Returns:
-    #         応答のチャンクを返すAsyncイテレータ
-    #     """
-    #     ...
-        
-    # モデル設定のメソッド
+
     def set_model(self, model_name: str) -> None:
         """
         使用するモデルを設定する
