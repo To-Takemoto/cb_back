@@ -37,12 +37,12 @@ class ChatInteraction:
         self.chat_repo.update_tree(self.structure_handler.chat_tree)
         return filled_llm_message
     
-    def restart_chat(self, chat_uuid: str):
+    def restart_chat(self, chat_uuid: str) -> None:
         #print(self.chat_repo.load_tree(chat_uuid))
         self.structure_handler.store_tree(self.chat_repo.load_tree(chat_uuid))
         self.structure_handler.set_latest()
 
-    def select_message(self, message_uuid):
+    def select_message(self, message_uuid: str) -> None:
         self.structure_handler.select_node(message_uuid)
 
     def find_message_from_cache(self, message_uuid: str) -> MessageEntity:
