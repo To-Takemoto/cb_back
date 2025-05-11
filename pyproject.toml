@@ -5,6 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "anytree>=2.13.0",
+    "bcrypt>=4.3.0",
     "httpx>=0.28.1",
+    "peewee>=3.18.1",
     "python-dotenv>=1.1.0",
 ]
