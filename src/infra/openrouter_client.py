@@ -40,16 +40,6 @@ class OpenRouterLLMService:
             "X-Title": "cb_back_local"
         }
         self.client = None
-        
-    async def __aenter__(self):
-        """非同期コンテキストマネージャとしての初期化"""
-        self.client = httpx.AsyncClient()
-        return self
-
-    async def __aexit__(self, exc_type, exc_value, traceback) -> None:
-        """非同期コンテキストマネージャとしての終了処理"""
-        if self.client:
-            await self.client.aclose()
             
     def set_model(self, model_name: str) -> None:
         """
@@ -76,8 +66,7 @@ class OpenRouterLLMService:
             サービス層で設定する必要があります。
         """
 
-        if not self.client:
-            raise RuntimeError("このクラスはコンテキストマネージャとしてのみ使用できます。'async with'構文を使用してください。")
+        self.client = httpx.AsyncClient()
         
         #urlの作成
         url = f"{self.BASE_URL}{self.CHAT_ENDPOINT}"
@@ -106,3 +95,6 @@ class OpenRouterLLMService:
             
         except Exception as e:
             raise e
+        
+        finally:
+            await self.client.aclose()

@@ -30,8 +30,7 @@ class ChatInteraction:
         fllatten_chat_history_uuid = self.structure_handler.get_current_path()
         flatten_chat_history = self.chat_repo.get_history(fllatten_chat_history_uuid)
         chat_history = self._convert_message_list(flatten_chat_history)
-        async with self.llm_client:
-            llm_response = await self.llm_client.complete_message(chat_history)
+        llm_response = await self.llm_client.complete_message(chat_history)
         llm_message_dict = self._format_llm_response(llm_response)
         filled_llm_message = self.chat_repo.save_message(self.structure_handler.chat_tree.uuid, llm_message_dict)
         self._cache_messsage(filled_llm_message)
