@@ -50,8 +50,6 @@ class OpenRouterLLMService:
         """非同期コンテキストマネージャとしての終了処理"""
         if self.client:
             await self.client.aclose()
-        if exc_type:
-            raise exc_type
             
     def set_model(self, model_name: str) -> None:
         """
@@ -61,27 +59,8 @@ class OpenRouterLLMService:
             model_name: 使用するモデル名
         """
         self.model = model_name
-    
-    @staticmethod
-    def _convert_to_api_messages(messages: list[MessageEntity]) -> list[dict]:
-        """
-        Message型からOpenRouter APIが期待する形式に変換する
         
-        Args:
-            messages: Message型のリスト
-            
-        Returns:
-            OpenRouter APIフォーマットのメッセージリスト
-        """
-        return [
-            {
-                "role": message.role.value,  # Role列挙型から文字列値を取得
-                "content": message.content
-            }
-            for message in messages
-        ]
-        
-    async def complete_message(self, messages: list[MessageEntity]) -> tuple[MessageEntity, dict]:
+    async def complete_message(self, messages: list[dict]) -> dict:
         """
         メッセージリストをLLMに送信し、応答テキストとメタデータを含む生のレスポンスを取得する
         
@@ -96,20 +75,19 @@ class OpenRouterLLMService:
             値が設定されません。これらの値はアプリケーション層または
             サービス層で設定する必要があります。
         """
-        url = f"{self.BASE_URL}{self.CHAT_ENDPOINT}"
+
+        if not self.client:
+            raise RuntimeError("このクラスはコンテキストマネージャとしてのみ使用できます。'async with'構文を使用してください。")
         
-        # Message型からOpenRouter APIが期待する形式に変換
-        formatted_messages = self._convert_to_api_messages(messages)
+        #urlの作成
+        url = f"{self.BASE_URL}{self.CHAT_ENDPOINT}"
         # リクエストデータの構築
         data = {
             "model": self.model,
-            "messages": formatted_messages,
+            "messages": messages,
             "temperature": 0.7,  # デフォルト値
             "max_tokens": 1000   # デフォルト値
         }
-        # クライアントの存在確認
-        if not self.client:
-            raise RuntimeError("このクラスはコンテキストマネージャとしてのみ使用できます。'async with'構文を使用してください。")
         try:
             response = await self.client.post(
                 url, 
@@ -120,17 +98,11 @@ class OpenRouterLLMService:
             response_data = response.json()
             # 応答からコンテンツを抽出
             try:
-                content = response_data["choices"][0]["message"]["content"]
+                response_data["choices"][0]["message"]["content"]
             except (KeyError, IndexError) as e:
                 raise ValueError(f"OpenRouter API レスポンスの解析に失敗しました: {e}, レスポンス: {response_data}")
-            
-            message = MessageEntity(
-                id=-1,  # ダミー値、上位層で適切に設定される必要がある
-                uuid=None,  # ダミー値、上位層で適切に設定される必要がある
-                role=Role.ASSISTANT,
-                content=content
-            )
-            return message, response_data
+
+            return response_data
             
         except Exception as e:
             raise e

@@ -18,7 +18,7 @@ class ChatRepository(Protocol):
         """
         pass
 
-    def save_message(self, discussion_structure_uuid: str, message: MessageEntity) -> MessageEntity:
+    def save_message(self, discussion_structure_uuid: str, message: dict) -> MessageEntity:
         """
         指定されたディスカッション構造に新しいメッセージを保存します。
         

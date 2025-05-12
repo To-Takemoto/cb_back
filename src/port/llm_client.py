@@ -1,10 +1,9 @@
 from typing import Protocol#, AsyncIterable
-from ..entity.message_entity import MessageEntity
 
 class LLMClient(Protocol):
     """LLMサービスとの通信を抽象化するインターフェース"""
     
-    async def complete_message(self, messages: list[MessageEntity]) -> tuple[MessageEntity, dict]:
+    async def complete_message(self, messages: list[dict]) -> dict:
         """
         メッセージリストをLLMに送信し、応答テキストを取得する
         

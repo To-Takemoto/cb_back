@@ -1,5 +1,6 @@
 import uuid as uuidGen
 from peewee import SqliteDatabase
+from peewee import DoesNotExist
 
 from ...entity.chat_tree import ChatTree, ChatStructure
 from ...entity.message_entity import MessageEntity, Role
@@ -16,26 +17,26 @@ class SqliteClient:
     def save_message(
             self,
             discussion_structure_uuid: str,
-            message: MessageEntity,
-            llm_detail: dict = None
+            message: dict,
             ) -> MessageEntity:
         "面倒で一部未実装。"
+        print(message)
         target_structure = DiscussionStructure.get(DiscussionStructure.uuid == discussion_structure_uuid)
         query = {
             "discussion": target_structure,
             "owner": self.user,
             "uuid": uuidGen.uuid4(),
-            "role": message.role.value,
-            "content": message.content,
+            "role": message["role"],
+            "content": message["content"],
         }
-        inserted_message = mm.create(**query)
+        inserted_message:mm = mm.create(**query)
         filled_message_entity = MessageEntity(
             id = inserted_message.id,
             uuid = inserted_message.uuid,
             role = self.evaluate_role(inserted_message.role),
             content = inserted_message.content
             )
-        if message.role == Role.ASSISTANT and llm_detail:
+        if message["role"] == "assistant":
             pass#ここにllmのメッセージの詳細を突っ込むロジックを用意すべき。
         return filled_message_entity
         
@@ -51,14 +52,14 @@ class SqliteClient:
         else:
             raise ValueError(f"想定外のrole;{role}が渡されました。")
 
-    def init_structure(self, initial_message: MessageEntity) -> ChatTree:
+    def init_structure(self, initial_message_dict: dict) -> ChatTree:
         query = {
             "owner": self.user,
             "uuid": uuidGen.uuid4(),
             "structure": "何もなし。"
         }
         null_strucuture:DiscussionStructure = DiscussionStructure.create(**query)
-        saved_message = self.save_message(null_strucuture.uuid, initial_message)
+        saved_message = self.save_message(null_strucuture.uuid, initial_message_dict)
         #pickleなんかを用いてORDBみたいに使い、nodemixinで作られたtreeをいい感じに保存する必要がある。
         new_tree = ChatTree(
             id = null_strucuture.id,
@@ -114,7 +115,7 @@ class SqliteClient:
                         .first())
         
         if latest_message is None:
-            raise mm.DoesNotExist("指定されたディスカッションにメッセージが存在しません。")
+            raise DoesNotExist("指定されたディスカッションにメッセージが存在しません。")
         
         # MessageEntityに変換して返す
         return MessageEntity(
@@ -157,7 +158,7 @@ class SqliteClient:
                 # 結果リストに追加
                 result_entities.append(message_entity)
                 
-            except mm.DoesNotExist:
+            except DoesNotExist:
                 # 該当するUUIDのメッセージが存在しない場合はスキップ
                 continue
         

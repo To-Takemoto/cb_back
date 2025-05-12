@@ -16,22 +16,24 @@ class ChatInteraction:
         self.message_store:list[MessageEntity] = []
 
     def start_new_chat(self, initial_strings: str = None) -> None:
-        initial_message = MessageEntity(None, None, Role.SYSTEM, initial_strings)
-        new_tree = self.chat_repo.init_structure(initial_message)
+        initial_message_dict = {"role":"system", "content":initial_strings}
+        new_tree = self.chat_repo.init_structure(initial_message_dict)
         self.structure_handler.store_tree(new_tree)
         self.structure_handler.set_latest()
 
     async def continue_chat(self, user_message_strings: str) -> MessageEntity:
-        user_message = MessageEntity(None, None, Role.USER, user_message_strings)
+        user_message = {"role":"user", "content": user_message_strings}
         filled_user_message = self.chat_repo.save_message(self.structure_handler.chat_tree.uuid, user_message)
         self._cache_messsage(filled_user_message)
         self.structure_handler.append_message(filled_user_message)
         self.chat_repo.update_tree(self.structure_handler.chat_tree)
         fllatten_chat_history_uuid = self.structure_handler.get_current_path()
         flatten_chat_history = self.chat_repo.get_history(fllatten_chat_history_uuid)
+        chat_history = self._convert_message_list(flatten_chat_history)
         async with self.llm_client:
-            llm_message, full_data = await self.llm_client.complete_message(flatten_chat_history)
-        filled_llm_message = self.chat_repo.save_message(self.structure_handler.chat_tree.uuid, llm_message, full_data)
+            llm_response = await self.llm_client.complete_message(chat_history)
+        llm_message_dict = self._format_llm_response(llm_response)
+        filled_llm_message = self.chat_repo.save_message(self.structure_handler.chat_tree.uuid, llm_message_dict)
         self._cache_messsage(filled_llm_message)
         self.structure_handler.append_message(filled_llm_message)
         self.chat_repo.update_tree(self.structure_handler.chat_tree)
@@ -54,3 +56,17 @@ class ChatInteraction:
 
     def _cache_messsage(self, message: MessageEntity) -> None:
         self.message_store.append(message)
+
+    @staticmethod
+    def _convert_message_list(message_list: list[MessageEntity]) -> list[dict]:
+        message_dict_list = []
+        for message in message_list:
+            role = str(message.role.value)
+            content = str(message.content)
+            message_dict = {"role":role, "content": content}
+            message_dict_list.append(message_dict)
+        return message_dict_list
+    
+    @staticmethod
+    def _format_llm_response(llm_response: dict) -> dict:
+        return {"role":"assistant", "content":llm_response["choices"][0]["message"]["content"]}
