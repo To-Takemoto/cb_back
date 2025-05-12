@@ -20,7 +20,6 @@ class SqliteClient:
             message: dict,
             ) -> MessageEntity:
         "面倒で一部未実装。"
-        print(message)
         target_structure = DiscussionStructure.get(DiscussionStructure.uuid == discussion_structure_uuid)
         query = {
             "discussion": target_structure,
