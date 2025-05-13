@@ -22,20 +22,12 @@ class ChatInteraction:
 
     async def continue_chat(self, user_message_strings: str) -> MessageEntity:
         user_message = {"role":"user", "content": user_message_strings}
-        filled_user_message = self.chat_repo.save_message(self.structure.get_uuid(), user_message)
-        self._cache_messsage(filled_user_message)
-        self.structure.append_message(filled_user_message)
-        self.chat_repo.update_tree(self.structure.get_chat_tree())
-        fllatten_chat_history_uuid = self.structure.get_current_path()
-        flatten_chat_history = self.chat_repo.get_history(fllatten_chat_history_uuid)
-        chat_history = self._convert_message_list(flatten_chat_history)
+        self._process_message(user_message)
+        chat_history = self._get_chat_history()
         llm_response = await self.llm_client.complete_message(chat_history)
         llm_message_dict = self._format_llm_response(llm_response)
-        filled_llm_message = self.chat_repo.save_message(self.structure.get_uuid(), llm_message_dict)
-        self._cache_messsage(filled_llm_message)
-        self.structure.append_message(filled_llm_message)
-        self.chat_repo.update_tree(self.structure.get_chat_tree())
-        return filled_llm_message
+        llm_message = self._process_message(llm_message_dict)
+        return llm_message
     
     def restart_chat(self, chat_uuid: str) -> None:
         chat_tree = self.chat_repo.load_tree(chat_uuid)
@@ -50,6 +42,23 @@ class ChatInteraction:
                 return message
         else:
             raise ValueError("uuidを持つmessageなし。")
+        
+    def _get_chat_history(self) -> list:
+        chat_history_uuid_list = self.structure.get_current_path()
+        flatten_chat_history = self.chat_repo.get_history(chat_history_uuid_list)
+        chat_history = self._convert_message_list(flatten_chat_history)
+        return chat_history
+        
+    def _process_message(self, message: dict) -> MessageEntity:
+        message_entity = self.chat_repo.save_message(
+            discussion_structure_uuid = self.structure.get_uuid(),
+            message = message
+            )
+        self._cache_messsage(message_entity)
+        self.structure.append_message(message_entity)
+        new_tree = self.structure.get_chat_tree()
+        self.chat_repo.update_tree(new_tree)
+        return message_entity
 
     def _cache_messsage(self, message: MessageEntity) -> None:
         self.message_store.append(message)
