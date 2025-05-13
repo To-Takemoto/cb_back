@@ -134,9 +134,6 @@ class SqliteClient:
             
         Returns:
             list[MessageEntity]: MessageEntityのリスト（UUIDリストと同じ順序で返される）
-            
-        Note:
-            存在しないUUIDが含まれる場合、そのメッセージはスキップされます。
         """
         # 結果格納用のリスト
         result_entities = []
@@ -158,7 +155,6 @@ class SqliteClient:
                 result_entities.append(message_entity)
                 
             except DoesNotExist:
-                # 該当するUUIDのメッセージが存在しない場合はスキップ
-                continue
+                raise DoesNotExist("対象のuuidを持つメッセージがdbにないようで。")
         
         return result_entities
