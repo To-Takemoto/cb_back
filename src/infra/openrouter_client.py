@@ -2,6 +2,7 @@ import os
 import httpx
 from dotenv import load_dotenv
 
+from .presentators import format_api_response, format_api_input
 from ..entity.message_entity import MessageEntity, Role
 
 class OpenRouterLLMService:
@@ -50,7 +51,7 @@ class OpenRouterLLMService:
         """
         self.model = model_name
         
-    async def complete_message(self, messages: list[dict]) -> dict:
+    async def complete_message(self, messages: list[MessageEntity]) -> dict:
         """
         メッセージリストをLLMに送信し、応答テキストとメタデータを含む生のレスポンスを取得する
         
@@ -65,15 +66,16 @@ class OpenRouterLLMService:
             値が設定されません。これらの値はアプリケーション層または
             サービス層で設定する必要があります。
         """
-
         self.client = httpx.AsyncClient()
+
+        message_dict_list = format_api_input.format_entity_list_to_dict_list(messages)
         
         #urlの作成
         url = f"{self.BASE_URL}{self.CHAT_ENDPOINT}"
         # リクエストデータの構築
         data = {
             "model": self.model,
-            "messages": messages,
+            "messages": message_dict_list,
             "temperature": 0.7,  # デフォルト値
             "max_tokens": 1000   # デフォルト値
         }

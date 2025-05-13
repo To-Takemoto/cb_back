@@ -5,7 +5,6 @@ from peewee import DoesNotExist
 from ...entity.chat_tree import ChatTree, ChatStructure
 from ...entity.message_entity import MessageEntity, Role
 from ...port.dto.message_dto import MessageDTO
-from ..presentators import format_api_input, format_api_response
 from .peewee_models import User, LLMDetails, DiscussionStructure, db_proxy
 from .peewee_models import Message as mm
 

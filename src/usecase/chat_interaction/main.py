@@ -44,10 +44,9 @@ class ChatInteraction:
         else:
             raise ValueError("uuidを持つmessageなし。")
         
-    def _get_chat_history(self) -> list:
+    def _get_chat_history(self) -> list[MessageEntity]:
         chat_history_uuid_list = self.structure.get_current_path()
-        flatten_chat_history = self.chat_repo.get_history(chat_history_uuid_list)
-        chat_history = self._convert_message_list(flatten_chat_history)
+        chat_history = self.chat_repo.get_history(chat_history_uuid_list)
         return chat_history
         
     def _process_message(self, message_dto: MessageDTO) -> MessageEntity:
@@ -64,15 +63,15 @@ class ChatInteraction:
     def _cache_messsage(self, message: MessageEntity) -> None:
         self.message_store.append(message)
 
-    @staticmethod
-    def _convert_message_list(message_list: list[MessageEntity]) -> list[dict]:
-        message_dict_list = []
-        for message in message_list:
-            role = str(message.role.value)
-            content = str(message.content)
-            message_dict = {"role":role, "content": content}
-            message_dict_list.append(message_dict)
-        return message_dict_list
+    # @staticmethod
+    # def _convert_message_list(message_list: list[MessageEntity]) -> list[dict]:
+    #     message_dict_list = []
+    #     for message in message_list:
+    #         role = str(message.role.value)
+    #         content = str(message.content)
+    #         message_dict = {"role":role, "content": content}
+    #         message_dict_list.append(message_dict)
+    #     return message_dict_list
     
     @staticmethod
     def _format_llm_response(llm_response: dict) -> dict:
