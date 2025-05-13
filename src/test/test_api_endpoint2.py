@@ -30,12 +30,12 @@ class TuiChat:
     async def start_chat(self, initial_message: str = None) -> None:
         """新しいチャットを開始する"""
         self.interaction_manager.start_new_chat(initial_message or "あなたは優秀なアシスタントです。userは日本語で回答を期待しています。")
-        print(f"チャット開始 - UUID: {self.interaction_manager.structure_handler.chat_tree.uuid}")
+        print(f"チャット開始 - UUID: {self.interaction_manager.structure.chat_tree.uuid}")
     
     async def restart_chat(self, chat_uuid: str) -> None:
         """既存のチャットを再開する"""
         self.interaction_manager.restart_chat(chat_uuid=chat_uuid)
-        print(f"チャット再開 - UUID: {self.interaction_manager.structure_handler.chat_tree.uuid}")
+        print(f"チャット再開 - UUID: {self.interaction_manager.structure.chat_tree.uuid}")
 
     async def send_message(self, message_content: str) -> str:
         """メッセージを送信し、応答を取得する"""
@@ -81,7 +81,7 @@ class TuiChat:
         
         elif commands[0] == "/tree":
             try:
-                tree = self.interaction_manager.structure_handler.chat_tree.tree
+                tree = self.interaction_manager.structure.chat_tree.tree
                 for pre, _, node in RenderTree(tree, style=AsciiStyle()):
                     print(f"{pre}[{node.uuid}]")
             except Exception as e:
@@ -101,7 +101,7 @@ class TuiChat:
         
         elif commands[0] == "/pwd":
             try:
-                current_node = self.interaction_manager.structure_handler.current_node
+                current_node = self.interaction_manager.structure.current_node
                 print(f"現在のノード: {current_node.uuid}")
             except Exception as e:
                 print(f"現在のノード表示エラー: {e}")
@@ -109,7 +109,7 @@ class TuiChat:
 
         elif commands[0] == "/uuid":
             try:
-                print(f"現在のチャットUUID: {self.interaction_manager.structure_handler.chat_tree.uuid}")
+                print(f"現在のチャットUUID: {self.interaction_manager.structure.chat_tree.uuid}")
             except Exception as e:
                 print(f"UUID表示エラー: {e}")
             return True

@@ -16,7 +16,7 @@ async def starter():
     interaction_manageer.start_new_chat("あなたは優秀なアシスタントです。userは日本語で回答を期待しています。")
     message = await interaction_manageer.continue_chat("こんにちは")
     print(message.content)
-    for pre, fill, node in RenderTree(interaction_manageer.structure_handler.chat_tree.tree, style=AsciiStyle()):
+    for pre, fill, node in RenderTree(interaction_manageer.structure.chat_tree.tree, style=AsciiStyle()):
         print(f"{pre}{node.uuid}")
     
 async def restart():
@@ -26,7 +26,7 @@ async def restart():
     interaction_manageer.restart_chat(chat_uuid="ca40f9cf-aca4-4a83-ac06-90b7258c700a")
     message = await interaction_manageer.continue_chat("1個目について詳しく教えてくれませんか")
     print(message.content)
-    for pre, fill, node in RenderTree(interaction_manageer.structure_handler.chat_tree.tree, style=AsciiStyle()):
+    for pre, fill, node in RenderTree(interaction_manageer.structure.chat_tree.tree, style=AsciiStyle()):
         print(f"{pre}{node.uuid}")
 
 async def select_message():
@@ -37,7 +37,7 @@ async def select_message():
     interaction_manageer.select_message(message_uuid="4198b4df-0a26-4d8c-9510-81e5876f7b7d")
     message = await interaction_manageer.continue_chat("２つ目について詳しく教えてくれませんか")
     print(message.content)
-    for pre, fill, node in RenderTree(interaction_manageer.structure_handler.chat_tree.tree, style=AsciiStyle()):
+    for pre, fill, node in RenderTree(interaction_manageer.structure.chat_tree.tree, style=AsciiStyle()):
         print(f"{pre}{node.uuid}")
 
 start = time.time()
