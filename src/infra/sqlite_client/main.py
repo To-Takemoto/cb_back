@@ -19,6 +19,7 @@ class SqliteClient:
             self,
             discussion_structure_uuid: str,
             message_dto: MessageDTO,
+            llm_details: dict = None
             ) -> MessageEntity:
         "面倒で一部未実装。"
         target_structure = DiscussionStructure.get(DiscussionStructure.uuid == discussion_structure_uuid)
@@ -36,7 +37,7 @@ class SqliteClient:
             role = self.evaluate_role(inserted_message.role),
             content = inserted_message.content
             )
-        if message_dto.role.value == "assistant":
+        if message_dto.role.value == "assistant" and llm_details:
             pass#ここにllmのメッセージの詳細を突っ込むロジックを用意すべき。
         return filled_message_entity
         

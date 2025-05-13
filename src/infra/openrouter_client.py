@@ -88,12 +88,10 @@ class OpenRouterLLMService:
             response.raise_for_status()  # エラーが発生した場合は例外を発生させる
             response_data = response.json()
             # 応答からコンテンツを抽出
-            try:
-                response_data["choices"][0]["message"]["content"]
-            except (KeyError, IndexError) as e:
-                raise ValueError(f"OpenRouter API レスポンスの解析に失敗しました: {e}, レスポンス: {response_data}")
 
-            return response_data
+            flatten_response_data = format_api_response.flatten_api_response(response_data)
+
+            return flatten_response_data
             
         except Exception as e:
             raise e

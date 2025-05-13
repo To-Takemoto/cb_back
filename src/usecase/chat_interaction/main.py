@@ -26,8 +26,8 @@ class ChatInteraction:
         self._process_message(user_message_dto)
         chat_history = self._get_chat_history()
         llm_response = await self.llm_client.complete_message(chat_history)
-        llm_message_dict = self._format_llm_response(llm_response)
-        llm_message = self._process_message(llm_message_dict)
+        llm_message_dto = MessageDTO(Role.ASSISTANT, llm_response["content"])
+        llm_message = self._process_message(llm_message_dto, llm_response)
         return llm_message
     
     def restart_chat(self, chat_uuid: str) -> None:
@@ -49,10 +49,11 @@ class ChatInteraction:
         chat_history = self.chat_repo.get_history(chat_history_uuid_list)
         return chat_history
         
-    def _process_message(self, message_dto: MessageDTO) -> MessageEntity:
+    def _process_message(self, message_dto: MessageDTO, llm_details: dict = None) -> MessageEntity:
         message_entity = self.chat_repo.save_message(
             discussion_structure_uuid = self.structure.get_uuid(),
-            message_dto = message_dto
+            message_dto = message_dto,
+            llm_details = llm_details
             )
         self._cache_messsage(message_entity)
         self.structure.append_message(message_entity)
@@ -73,6 +74,6 @@ class ChatInteraction:
     #         message_dict_list.append(message_dict)
     #     return message_dict_list
     
-    @staticmethod
-    def _format_llm_response(llm_response: dict) -> dict:
-        return MessageDTO(Role.ASSISTANT, llm_response["choices"][0]["message"]["content"])
+    # @staticmethod
+    # def _format_llm_response(llm_response: dict) -> dict:
+    #     return MessageDTO(Role.ASSISTANT, llm_response["choices"][0]["message"]["content"])
