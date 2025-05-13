@@ -1,6 +1,7 @@
 from ...entity.message_entity import MessageEntity, Role
 from ...port.chat_repo import ChatRepository
 from ...port.llm_client import LLMClient
+from ...port.dto.message_dto import MessageDTO
 from .structure_handler import StructureHandle
 
 class ChatInteraction:
@@ -16,13 +17,13 @@ class ChatInteraction:
         self.message_store:list[MessageEntity] = []
 
     def start_new_chat(self, initial_strings: str = None) -> None:
-        initial_message_dict = {"role":"system", "content":initial_strings}
-        new_tree = self.chat_repo.init_structure(initial_message_dict)
+        initial_message_dto = MessageDTO(Role.SYSTEM, initial_strings)
+        new_tree = self.chat_repo.init_structure(initial_message_dto)
         self.structure.store_tree(new_tree)
 
     async def continue_chat(self, user_message_strings: str) -> MessageEntity:
-        user_message = {"role":"user", "content": user_message_strings}
-        self._process_message(user_message)
+        user_message_dto = MessageDTO(Role.USER, user_message_strings)
+        self._process_message(user_message_dto)
         chat_history = self._get_chat_history()
         llm_response = await self.llm_client.complete_message(chat_history)
         llm_message_dict = self._format_llm_response(llm_response)
@@ -49,10 +50,10 @@ class ChatInteraction:
         chat_history = self._convert_message_list(flatten_chat_history)
         return chat_history
         
-    def _process_message(self, message: dict) -> MessageEntity:
+    def _process_message(self, message_dto: MessageDTO) -> MessageEntity:
         message_entity = self.chat_repo.save_message(
             discussion_structure_uuid = self.structure.get_uuid(),
-            message = message
+            message_dto = message_dto
             )
         self._cache_messsage(message_entity)
         self.structure.append_message(message_entity)
@@ -75,4 +76,4 @@ class ChatInteraction:
     
     @staticmethod
     def _format_llm_response(llm_response: dict) -> dict:
-        return {"role":"assistant", "content":llm_response["choices"][0]["message"]["content"]}
+        return MessageDTO(Role.ASSISTANT, llm_response["choices"][0]["message"]["content"])
