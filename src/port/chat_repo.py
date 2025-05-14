@@ -37,7 +37,7 @@ class ChatRepository(Protocol):
         """
         pass
 
-    def init_structure(self, initial_message: MessageEntity) -> ChatTree:
+    def init_structure(self, initial_message: MessageEntity) -> tuple[ChatTree, MessageEntity]:
         """
         新しいチャット構造を初期化し、指定された初期メッセージを保存します。
         

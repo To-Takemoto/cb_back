@@ -53,7 +53,7 @@ class SqliteClient:
         else:
             raise ValueError(f"想定外のrole;{role}が渡されました。")
 
-    def init_structure(self, initial_message_dto: MessageDTO) -> ChatTree:
+    def init_structure(self, initial_message_dto: MessageDTO) -> tuple[ChatTree, MessageEntity]:
         query = {
             "owner": self.user,
             "uuid": uuidGen.uuid4(),
@@ -71,7 +71,7 @@ class SqliteClient:
         filled_tree.structure = new_tree.get_tree_bin()
         filled_tree.save()
 
-        return new_tree
+        return new_tree, saved_message
         
     def load_tree(self, uuid: str) -> ChatTree:
         target_tree_record:DiscussionStructure = DiscussionStructure.get(DiscussionStructure.uuid == uuid)
