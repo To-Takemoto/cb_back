@@ -1,5 +1,6 @@
 from typing import Protocol
 
+from .dto.message_dto import MessageDTO
 from ..entity.message_entity import MessageEntity
 from ..entity.chat_tree import ChatTree
 
@@ -18,7 +19,12 @@ class ChatRepository(Protocol):
         """
         pass
 
-    def save_message(self, discussion_structure_uuid: str, message: MessageEntity) -> MessageEntity:
+    def save_message(
+            self,
+            discussion_structure_uuid: str,
+            message_dto: MessageDTO,
+            llm_details: dict = None
+            ) -> MessageEntity:
         """
         指定されたディスカッション構造に新しいメッセージを保存します。
         
@@ -31,7 +37,7 @@ class ChatRepository(Protocol):
         """
         pass
 
-    def init_structure(self, initial_message: MessageEntity) -> ChatTree:
+    def init_structure(self, initial_message: MessageEntity) -> tuple[ChatTree, MessageEntity]:
         """
         新しいチャット構造を初期化し、指定された初期メッセージを保存します。
         

@@ -6,7 +6,7 @@ import pickle
 #from .message_entity import MessageEntity
 
 class ChatStructure(NodeMixin):
-    def __init__(self, message_uuid: str, parent):
+    def __init__(self, message_uuid: str, parent: None|NodeMixin):
         self.uuid = message_uuid
         self.parent = parent
 
