@@ -19,7 +19,7 @@ class SqliteClient:
             self,
             discussion_structure_uuid: str,
             message_dto: MessageDTO,
-            llm_details: dict = None
+            llm_details: dict|None = None
             ) -> MessageEntity:
         "面倒で一部未実装。"
         target_structure = DiscussionStructure.get(DiscussionStructure.uuid == discussion_structure_uuid)

@@ -14,7 +14,7 @@ class OpenRouterLLMService:
     
     def __init__(
         self,
-        api_key: str = None,
+        api_key: str|None = None,
         default_model: str = "openai/gpt-3.5-turbo"
     ):
         """

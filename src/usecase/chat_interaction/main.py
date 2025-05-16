@@ -17,7 +17,7 @@ class ChatInteraction:
         self.structure = StructureHandle(self.chat_repo)
         self.cache = MessageCache()
 
-    def start_new_chat(self, initial_strings: str = None) -> None:
+    def start_new_chat(self, initial_strings: str|None = None) -> None:
         initial_message_dto = MessageDTO(Role.SYSTEM, initial_strings)
         new_tree, initial_message_entity = self.chat_repo.init_structure(initial_message_dto)
         self.structure.store_tree(new_tree)
@@ -44,7 +44,7 @@ class ChatInteraction:
         chat_history = self.chat_repo.get_history(chat_history_uuid_list)
         return chat_history
         
-    def _process_message(self, message_dto: MessageDTO, llm_details: dict = None) -> MessageEntity:
+    def _process_message(self, message_dto: MessageDTO, llm_details: dict|None = None) -> MessageEntity:
         message_entity = self.chat_repo.save_message(
             discussion_structure_uuid = self.structure.get_uuid(),
             message_dto = message_dto,
