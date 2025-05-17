@@ -1,4 +1,4 @@
-from ...entity.message_entity import MessageEntity
+from ...domain.entity.message_entity import MessageEntity
 
 class MessageCache:
     def __init__(self) -> None:

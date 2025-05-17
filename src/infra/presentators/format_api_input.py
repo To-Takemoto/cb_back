@@ -1,4 +1,4 @@
-from ...entity.message_entity import MessageEntity
+from ...domain.entity.message_entity import MessageEntity
 
 def format_entity_to_dict(message_entity: MessageEntity) -> dict:
     content = message_entity.content

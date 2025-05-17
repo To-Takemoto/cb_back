@@ -1,8 +1,8 @@
 from typing import Protocol
 
 from .dto.message_dto import MessageDTO
-from ..entity.message_entity import MessageEntity
-from ..entity.chat_tree import ChatTree
+from ..domain.entity.message_entity import MessageEntity
+from ..domain.entity.chat_tree import ChatTree
 
 class ChatRepository(Protocol):
     """

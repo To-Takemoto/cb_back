@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from ...entity.message_entity import Role
+from ...domain.entity.message_entity import Role
 
 
 @dataclass

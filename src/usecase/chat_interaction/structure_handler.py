@@ -1,5 +1,5 @@
-from ...entity.chat_tree import ChatTree, ChatStructure
-from ...entity.message_entity import MessageEntity
+from ...domain.entity.chat_tree import ChatTree, ChatStructure
+from ...domain.entity.message_entity import MessageEntity
 from ...port.chat_repo import ChatRepository
 
 class StructureHandle:

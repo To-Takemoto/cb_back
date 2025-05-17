@@ -1,4 +1,4 @@
-from ...entity.message_entity import MessageEntity, Role
+from ...domain.entity.message_entity import MessageEntity, Role
 from ...port.chat_repo import ChatRepository
 from ...port.llm_client import LLMClient
 from ...port.dto.message_dto import MessageDTO
@@ -10,12 +10,13 @@ class ChatInteraction:
         self,
         chat_repo: ChatRepository,
         llm_client: LLMClient,
+        cache_handle: MessageCache
         ) -> None:
         """ """
         self.chat_repo = chat_repo
         self.llm_client = llm_client
         self.structure = StructureHandle(self.chat_repo)
-        self.cache = MessageCache()
+        self.cache = cache_handle
 
     def start_new_chat(self, initial_strings: str|None = None) -> None:
         initial_message_dto = MessageDTO(Role.SYSTEM, initial_strings)

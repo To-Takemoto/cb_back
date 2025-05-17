@@ -3,7 +3,7 @@ import httpx
 from dotenv import load_dotenv
 
 from .presentators import format_api_response, format_api_input
-from ..entity.message_entity import MessageEntity, Role
+from ..domain.entity.message_entity import MessageEntity, Role
 
 class OpenRouterLLMService:
     """OpenRouter APIと連携するLLMサービスの実装"""
