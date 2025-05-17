@@ -14,7 +14,7 @@ class ChatStructure(NodeMixin):
 class ChatTree:
     id: int
     uuid: str
-    tree: ChatStructure
+    tree: ChatStructure|None
 
     def get_tree_bin(self) -> bytes:
         return pickle.dumps(self.tree)
