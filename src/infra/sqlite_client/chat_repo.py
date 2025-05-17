@@ -2,14 +2,14 @@ import uuid as uuidGen
 from peewee import SqliteDatabase
 from peewee import DoesNotExist
 
-from ...entity.chat_tree import ChatTree, ChatStructure
-from ...entity.message_entity import MessageEntity, Role
+from ...domain.entity.chat_tree import ChatTree, ChatStructure
+from ...domain.entity.message_entity import MessageEntity, Role
 from ...port.dto.message_dto import MessageDTO
 from .peewee_models import User, LLMDetails, DiscussionStructure, db_proxy
 from .peewee_models import Message as mm
 
 
-class SqliteClient:
+class ChatRepo:
     def __init__(self, user_id: int):
         db = SqliteDatabase("data/sqlite.db")
         db_proxy.initialize(db)
