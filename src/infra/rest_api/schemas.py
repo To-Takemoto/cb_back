@@ -19,3 +19,11 @@ class SelectRequest(BaseModel):
 
 class PathResponse(BaseModel):
     path: List[str]
+
+class HistoryMessage(BaseModel):
+    message_uuid: str
+    role: str
+    content: str
+
+class HistoryResponse(BaseModel):
+    messages: List[HistoryMessage]

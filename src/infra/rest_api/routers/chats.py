@@ -2,12 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..dependencies import get_chat_interaction, ChatInteraction
 from ..schemas import (
-    ChatCreateRequest,
-    ChatCreateResponse,
-    MessageRequest,
-    MessageResponse,
-    SelectRequest,
-    PathResponse
+    ChatCreateRequest, ChatCreateResponse,
+    MessageRequest, MessageResponse,
+    SelectRequest, PathResponse,
+    HistoryMessage, HistoryResponse
 )
 
 router = APIRouter(
@@ -24,9 +22,7 @@ async def create_chat(
     新しいチャットを開始し、チャットUUIDを返す
     """
     interaction.start_new_chat(req.initial_message)
-    # UUID オブジェクトを文字列に変換して返却
-    uuid_str = str(interaction.structure.get_uuid())
-    return ChatCreateResponse(chat_uuid=uuid_str)
+    return ChatCreateResponse(chat_uuid=str(interaction.structure.get_uuid()))
 
 @router.post("/{chat_uuid}/messages", response_model=MessageResponse)
 async def send_message(
@@ -40,13 +36,53 @@ async def send_message(
     try:
         interaction.restart_chat(chat_uuid)
     except Exception:
-        raise HTTPException(404, "Chat not found")
+        raise HTTPException(status_code=404, detail="Chat not found")
 
     msg = await interaction.continue_chat(req.content)
-    # MessageEntity.uuid が UUID なら文字列に
     return MessageResponse(
         message_uuid=str(msg.uuid),
         content=msg.content
+    )
+
+@router.get("/{chat_uuid}/messages", response_model=HistoryResponse)
+async def get_history(
+    chat_uuid: str,
+    interaction: ChatInteraction = Depends(get_chat_interaction)
+):
+    """
+    指定チャットの全メッセージ履歴を返却（キャッシュ利用）
+    """
+    try:
+        interaction.restart_chat(chat_uuid)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    # ツリーパスに沿ったメッセージUUIDリスト
+    path = interaction.structure.get_current_path()
+
+    # キャッシュから取得し、存在しないものはDBフェッチ
+    messages = []
+    missing = []
+    for u in path:
+        if interaction.cache.exists(u):
+            messages.append(interaction.cache.get(u))
+        else:
+            missing.append(u)
+
+    if missing:
+        fetched = interaction.chat_repo.get_history(missing)
+        for m in fetched:
+            interaction.cache.set(m)
+        messages = [interaction.cache.get(u) for u in path]
+
+    return HistoryResponse(
+        messages=[
+            HistoryMessage(
+                message_uuid=str(m.uuid),
+                role=m.role.value,
+                content=m.content
+            ) for m in messages
+        ]
     )
 
 @router.post("/{chat_uuid}/select")
@@ -62,9 +98,9 @@ async def select_node(
         interaction.restart_chat(chat_uuid)
         interaction.select_message(req.message_uuid)
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception:
-        raise HTTPException(404, "Chat not found")
+        raise HTTPException(status_code=404, detail="Chat not found")
     return {"detail": f"Selected {req.message_uuid}"}
 
 @router.get("/{chat_uuid}/path", response_model=PathResponse)
@@ -78,7 +114,5 @@ async def get_path(
     try:
         interaction.restart_chat(chat_uuid)
     except Exception:
-        raise HTTPException(404, "Chat not found")
-    # path の要素は既に文字列のはずですが念のためキャスト
-    path_list = [str(u) for u in interaction.structure.get_current_path()]
-    return PathResponse(path=path_list)
+        raise HTTPException(status_code=404, detail="Chat not found")
+    return PathResponse(path=[str(u) for u in interaction.structure.get_current_path()])
