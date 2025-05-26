@@ -45,7 +45,7 @@ def flatten_api_response(llm_response) -> dict:
             'completion_tokens': llm_response.get('usage', {}).get('completion_tokens', 0),
             'total_tokens': llm_response.get('usage', {}).get('total_tokens', 0)
         }
-        print(llm_details_data)
+        #print(llm_details_data)
                 
         return llm_details_data
         
