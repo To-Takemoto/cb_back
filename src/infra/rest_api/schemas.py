@@ -1,23 +1,21 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import List, Optional
 
-# リクエストモデル
-class UserCreate(BaseModel):
-    name: str
-    email: EmailStr
-    password: str
+class ChatCreateRequest(BaseModel):
+    initial_message: Optional[str] = None
 
-# レスポンスモデル
-class UserResponse(BaseModel):
-    id: int
-    name: str
-    email: str
-    
-    class Config:
-        # ORMモードを有効にすると、ORM（SQLAlchemy）オブジェクトからの変換が容易になる
-        orm_mode = True
+class ChatCreateResponse(BaseModel):
+    chat_uuid: str
 
-# 一覧取得用レスポンスモデル
-class UsersResponse(BaseModel):
-    users: List[UserResponse]
-    total: int
+class MessageRequest(BaseModel):
+    content: str
+
+class MessageResponse(BaseModel):
+    message_uuid: str
+    content: str
+
+class SelectRequest(BaseModel):
+    message_uuid: str
+
+class PathResponse(BaseModel):
+    path: List[str]

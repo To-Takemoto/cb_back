@@ -1,22 +1,23 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-from ..di import get_chat_repo_client, get_llm_client, generate_message_cache
-from ...usecase.chat_interaction.main import ChatInteraction
+from .routers.chats import router as chats_router
 
+app = FastAPI(
+    title="Chat LLM Service API",
+    version="0.1.0"
+)
 
-app = FastAPI()
+# CORS 設定（Reflex / SolidJS 対応）
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# ユーザー作成エンドポイント - リクエストとレスポンスにスキーマを使用
-@app.post("/TEST_start_new_chat")
-async def start_new_chat(
-        llm_client = Depends(get_llm_client),
-        chat_repo = Depends(get_chat_repo_client),
-        chat_cache = Depends(generate_message_cache)
-    ):
-    interaction_manageer = ChatInteraction(chat_repo, llm_client, chat_cache)
-    interaction_manageer.start_new_chat("あなたは優秀なアシスタントです。userは日本語で回答を期待しています。")
-    message = await interaction_manageer.continue_chat("こんにちは")
-    print(message.content)
-    return interaction_manageer.structure.chat_tree.uuid
+# 各機能モジュールのルーター登録
+app.include_router(chats_router)
+
 
 #uvicorn src.infra.rest_api.main:app --reload
