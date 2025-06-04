@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .routers.chats import router as chats_router
+from .routers.users import router as users_router
 
 app = FastAPI(
     title="Chat LLM Service API",
@@ -18,6 +19,7 @@ app.add_middleware(
 
 # 各機能モジュールのルーター登録
 app.include_router(chats_router)
+app.include_router(users_router)
 
 
 #uvicorn src.infra.rest_api.main:app --reload

@@ -21,7 +21,8 @@ async def create_chat(
     """
     新しいチャットを開始し、チャットUUIDを返す
     """
-    interaction.start_new_chat(req.initial_message)
+    # 初期メッセージがNoneの場合は空文字列を渡す
+    interaction.start_new_chat(req.initial_message or "")
     return ChatCreateResponse(chat_uuid=str(interaction.structure.get_uuid()))
 
 @router.post("/{chat_uuid}/messages", response_model=MessageResponse)
@@ -50,30 +51,26 @@ async def get_history(
     interaction: ChatInteraction = Depends(get_chat_interaction)
 ):
     """
-    指定チャットの全メッセージ履歴を返却（キャッシュ利用）
+    指定チャットの全メッセージ履歴を返却
     """
     try:
         interaction.restart_chat(chat_uuid)
     except Exception:
         raise HTTPException(status_code=404, detail="Chat not found")
 
-    # ツリーパスに沿ったメッセージUUIDリスト
     path = interaction.structure.get_current_path()
-
+    messages_entities = []
     # キャッシュから取得し、存在しないものはDBフェッチ
-    messages = []
-    missing = []
-    for u in path:
-        if interaction.cache.exists(u):
-            messages.append(interaction.cache.get(u))
-        else:
-            missing.append(u)
-
-    if missing:
-        fetched = interaction.chat_repo.get_history(missing)
-        for m in fetched:
-            interaction.cache.set(m)
-        messages = [interaction.cache.get(u) for u in path]
+    for uuid in path:
+        msg = interaction.cache.get(uuid)
+        if msg is None:
+            try:
+                fetched = interaction.chat_repo.get_history([uuid])[0]
+            except Exception:
+                raise HTTPException(status_code=404, detail=f"Message {uuid} not found")
+            interaction.cache.set(fetched)
+            msg = fetched
+        messages_entities.append(msg)
 
     return HistoryResponse(
         messages=[
@@ -81,7 +78,7 @@ async def get_history(
                 message_uuid=str(m.uuid),
                 role=m.role.value,
                 content=m.content
-            ) for m in messages
+            ) for m in messages_entities
         ]
     )
 

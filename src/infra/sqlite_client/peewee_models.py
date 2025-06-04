@@ -9,6 +9,7 @@ from peewee import (
     )
 import bcrypt
 
+from uuid import uuid4
 import datetime
 
 db_proxy = DatabaseProxy()
@@ -59,6 +60,22 @@ class LLMDetails(Model):
     prompt_tokens = IntegerField()
     completion_tokens = IntegerField()
     total_tokens = IntegerField()
+
+    class Meta:
+        database = db_proxy
+
+class User(Model):
+    uuid = CharField(unique=True, default=lambda: str(uuid4()))  # 新規追加: UUID
+    name = CharField(unique=True)
+    password = CharField()
+    created_at = DateTimeField(default=datetime.datetime.now)
+
+    def save(self, *args, **kwargs):
+        # 新規作成時にパスワードをハッシュ化
+        if self._pk is None:
+            hashed = bcrypt.hashpw(self.password.encode('utf-8'), bcrypt.gensalt())
+            self.password = hashed.decode('utf-8')
+        return super().save(*args, **kwargs)
 
     class Meta:
         database = db_proxy
