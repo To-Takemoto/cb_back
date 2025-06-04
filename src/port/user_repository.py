@@ -1,6 +1,6 @@
-from typing import Protocol
+from typing import Protocol, Optional, List
 from ..domain.entity.user_entity import UserEntity
-from ..port.dto.user_dto import CreateUserDTO
+from ..port.dto.user_dto import CreateUserDTO, UserDTO
 
 class UserRepository(Protocol):
     """
@@ -11,4 +11,10 @@ class UserRepository(Protocol):
         ...
 
     def save(self, user_dto: CreateUserDTO) -> UserEntity:
+        ...
+    
+    def get_user_by_name(self, username: str) -> Optional[UserDTO]:
+        ...
+    
+    def get_all_users(self) -> List[UserDTO]:
         ...

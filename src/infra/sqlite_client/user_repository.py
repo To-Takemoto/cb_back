@@ -1,9 +1,10 @@
 from uuid import UUID
 from datetime import datetime
-from peewee import SqliteDatabase
+from peewee import SqliteDatabase, DoesNotExist
+from typing import Optional, List
 
 from ...port.user_repository import UserRepository
-from ...port.dto.user_dto import CreateUserDTO
+from ...port.dto.user_dto import CreateUserDTO, UserDTO
 from ...domain.entity.user_entity import UserEntity
 from .peewee_models import User as UserModel, db_proxy
 
@@ -33,3 +34,29 @@ class SqliteUserRepository(UserRepository):
             password_hash=user.password,
             created_at=user.created_at
         )
+    
+    def get_user_by_name(self, username: str) -> Optional[UserDTO]:
+        """ユーザー名でユーザーを取得"""
+        try:
+            user = UserModel.get(UserModel.name == username)
+            return UserDTO(
+                id=user.id,
+                uuid=user.uuid,
+                name=user.name,
+                password=user.password
+            )
+        except DoesNotExist:
+            return None
+    
+    def get_all_users(self) -> List[UserDTO]:
+        """全ユーザーを取得"""
+        users = UserModel.select()
+        return [
+            UserDTO(
+                id=user.id,
+                uuid=user.uuid,
+                name=user.name,
+                password=user.password
+            )
+            for user in users
+        ]

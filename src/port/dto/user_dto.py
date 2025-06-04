@@ -7,3 +7,13 @@ class CreateUserDTO:
     """
     username: str
     raw_password: str
+
+@dataclass
+class UserDTO:
+    """
+    ユーザー情報DTO
+    """
+    id: int
+    uuid: str
+    name: str
+    password: str
