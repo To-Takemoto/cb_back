@@ -1,4 +1,4 @@
-from typing import Protocol
+from typing import Protocol, Optional
 
 from .dto.message_dto import MessageDTO
 from ..domain.entity.message_entity import MessageEntity
@@ -98,5 +98,81 @@ class ChatRepository(Protocol):
             
         Note:
             存在しないUUIDが含まれる場合、そのメッセージはスキップされます。
+        """
+        pass
+    
+    def update_last_position(self, chat_uuid: str, user_uuid: str, node_id: str) -> None:
+        """
+        ユーザーの最後の位置（ノードID）を更新します。
+        
+        Args:
+            chat_uuid: チャットのUUID
+            user_uuid: ユーザーのUUID
+            node_id: 最後に訪れたノードのID
+        """
+        pass
+    
+    def get_last_position(self, chat_uuid: str, user_uuid: str) -> Optional[str]:
+        """
+        ユーザーの最後の位置（ノードID）を取得します。
+        
+        Args:
+            chat_uuid: チャットのUUID
+            user_uuid: ユーザーのUUID
+            
+        Returns:
+            Optional[str]: 最後に訪れたノードのID、存在しない場合はNone
+        """
+        pass
+    
+    def get_recent_chats(self, user_uuid: str, limit: int = 10) -> list[dict]:
+        """
+        ユーザーの最近のチャット一覧を取得します。
+        
+        Args:
+            user_uuid: ユーザーのUUID
+            limit: 取得する件数の上限
+            
+        Returns:
+            list[dict]: チャット情報のリスト
+        """
+        pass
+    
+    def delete_chat(self, chat_uuid: str, user_uuid: str) -> bool:
+        """
+        チャットを削除します。
+        
+        Args:
+            chat_uuid: チャットのUUID
+            user_uuid: ユーザーのUUID（権限確認用）
+            
+        Returns:
+            bool: 削除成功時True、失敗時False
+        """
+        pass
+    
+    def search_messages(self, chat_uuid: str, query: str) -> list[dict]:
+        """
+        チャット内のメッセージを検索します。
+        
+        Args:
+            chat_uuid: チャットのUUID
+            query: 検索クエリ
+            
+        Returns:
+            list[dict]: 検索結果のメッセージリスト
+        """
+        pass
+    
+    def get_chats_by_date(self, user_uuid: str, date_filter: str) -> list[dict]:
+        """
+        日付でフィルタリングしたチャット一覧を取得します。
+        
+        Args:
+            user_uuid: ユーザーのUUID
+            date_filter: フィルタ条件（today, yesterday, week, month）
+            
+        Returns:
+            list[dict]: フィルタリングされたチャット情報のリスト
         """
         pass

@@ -79,3 +79,16 @@ class User(Model):
 
     class Meta:
         database = db_proxy
+
+class UserChatPosition(Model):
+    """ユーザーの最後の位置を記録するテーブル"""
+    user = ForeignKeyField(User, backref='chat_positions')
+    discussion = ForeignKeyField(DiscussionStructure, backref='user_positions')
+    last_node_id = CharField()
+    updated_at = DateTimeField(default=datetime.datetime.now)
+    
+    class Meta:
+        database = db_proxy
+        indexes = (
+            (('user', 'discussion'), True),  # ユニーク複合インデックス
+        )

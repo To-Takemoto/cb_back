@@ -1,10 +1,12 @@
 import uuid as uuidGen
 from peewee import SqliteDatabase, DoesNotExist
+from typing import Optional
+import datetime
 
 from ...domain.entity.chat_tree import ChatTree, ChatStructure
 from ...domain.entity.message_entity import MessageEntity, Role
 from ...port.dto.message_dto import MessageDTO
-from .peewee_models import User, LLMDetails, DiscussionStructure, db_proxy
+from .peewee_models import User, LLMDetails, DiscussionStructure, db_proxy, UserChatPosition
 from .peewee_models import Message as mm
 
 class ChatRepo:
@@ -122,3 +124,190 @@ class ChatRepo:
                 )
             )
         return results
+    
+    def update_last_position(self, chat_uuid: str, user_uuid: str, node_id: str) -> None:
+        """ユーザーの最後の位置を更新"""
+        try:
+            # ユーザーをUUIDから取得
+            user = User.get(User.uuid == user_uuid)
+            discussion = DiscussionStructure.get(DiscussionStructure.uuid == chat_uuid)
+            
+            # Upsert: 存在すれば更新、なければ作成
+            position, created = UserChatPosition.get_or_create(
+                user=user,
+                discussion=discussion,
+                defaults={'last_node_id': node_id}
+            )
+            
+            if not created:
+                position.last_node_id = node_id
+                position.updated_at = datetime.datetime.now()
+                position.save()
+                
+        except DoesNotExist:
+            # ユーザーまたはディスカッションが存在しない場合は何もしない
+            pass
+    
+    def get_last_position(self, chat_uuid: str, user_uuid: str) -> Optional[str]:
+        """ユーザーの最後の位置を取得"""
+        try:
+            user = User.get(User.uuid == user_uuid)
+            discussion = DiscussionStructure.get(DiscussionStructure.uuid == chat_uuid)
+            position = UserChatPosition.get(
+                UserChatPosition.user == user,
+                UserChatPosition.discussion == discussion
+            )
+            return position.last_node_id
+        except DoesNotExist:
+            return None
+    
+    def get_recent_chats(self, user_uuid: str, limit: int = 10) -> list[dict]:
+        """ユーザーの最近のチャット一覧を取得"""
+        try:
+            user = User.get(User.uuid == user_uuid)
+            discussions = (DiscussionStructure
+                         .select()
+                         .where(DiscussionStructure.owner == user)
+                         .order_by(DiscussionStructure.created_at.desc())
+                         .limit(limit))
+            
+            result = []
+            for disc in discussions:
+                # メッセージ数をカウント
+                message_count = mm.select().where(mm.discussion == disc).count()
+                
+                # 最初のメッセージからタイトルを生成（または専用フィールドがあれば使用）
+                first_message = mm.select().where(mm.discussion == disc).order_by(mm.created_at).first()
+                title = first_message.content[:50] + "..." if first_message and len(first_message.content) > 50 else (first_message.content if first_message else "New Chat")
+                
+                result.append({
+                    "uuid": disc.uuid,
+                    "title": title,
+                    "created_at": disc.created_at.isoformat(),
+                    "updated_at": disc.created_at.isoformat(),  # TODO: 更新日時を別途管理する場合は修正
+                    "message_count": message_count
+                })
+            
+            return result
+        except DoesNotExist:
+            return []
+    
+    def delete_chat(self, chat_uuid: str, user_uuid: str) -> bool:
+        """チャットを削除"""
+        try:
+            user = User.get(User.uuid == user_uuid)
+            discussion = DiscussionStructure.get(
+                DiscussionStructure.uuid == chat_uuid,
+                DiscussionStructure.owner == user
+            )
+            
+            # 関連するメッセージとLLM詳細を削除
+            messages = mm.select().where(mm.discussion == discussion)
+            for message in messages:
+                LLMDetails.delete().where(LLMDetails.message == message).execute()
+            
+            mm.delete().where(mm.discussion == discussion).execute()
+            
+            # ユーザーの位置情報を削除
+            UserChatPosition.delete().where(UserChatPosition.discussion == discussion).execute()
+            
+            # ディスカッション構造を削除
+            discussion.delete_instance()
+            
+            return True
+        except DoesNotExist:
+            return False
+    
+    def search_messages(self, chat_uuid: str, query: str) -> list[dict]:
+        """チャット内のメッセージを検索"""
+        try:
+            discussion = DiscussionStructure.get(DiscussionStructure.uuid == chat_uuid)
+            
+            # SQLiteのLIKE演算子で検索
+            messages = (mm.select()
+                       .where(
+                           (mm.discussion == discussion) & 
+                           (mm.content.contains(query))
+                       )
+                       .order_by(mm.created_at.desc()))
+            
+            results = []
+            for msg in messages:
+                # ハイライト処理（簡易版）
+                import re
+                highlighted = re.sub(
+                    f'({re.escape(query)})',
+                    r'<mark>\1</mark>',
+                    msg.content,
+                    flags=re.IGNORECASE
+                )
+                
+                results.append({
+                    "uuid": msg.uuid,
+                    "content": msg.content,
+                    "role": msg.role,
+                    "created_at": msg.created_at.isoformat(),
+                    "highlight": highlighted
+                })
+            
+            return results
+        except DoesNotExist:
+            return []
+    
+    def get_chats_by_date(self, user_uuid: str, date_filter: str) -> list[dict]:
+        """日付でフィルタリングしたチャット一覧を取得"""
+        try:
+            user = User.get(User.uuid == user_uuid)
+            
+            # 日付フィルタの設定
+            today = datetime.datetime.now().date()
+            if date_filter == "today":
+                start_date = today
+            elif date_filter == "yesterday":
+                start_date = today - datetime.timedelta(days=1)
+                end_date = today
+            elif date_filter == "week":
+                start_date = today - datetime.timedelta(days=7)
+            elif date_filter == "month":
+                start_date = today - datetime.timedelta(days=30)
+            else:
+                return []
+            
+            # クエリの構築
+            query = DiscussionStructure.select().where(
+                DiscussionStructure.owner == user
+            )
+            
+            if date_filter == "today":
+                query = query.where(
+                    DiscussionStructure.created_at >= datetime.datetime.combine(start_date, datetime.time.min)
+                )
+            elif date_filter == "yesterday":
+                query = query.where(
+                    (DiscussionStructure.created_at >= datetime.datetime.combine(start_date, datetime.time.min)) &
+                    (DiscussionStructure.created_at < datetime.datetime.combine(end_date, datetime.time.min))
+                )
+            else:
+                query = query.where(
+                    DiscussionStructure.created_at >= datetime.datetime.combine(start_date, datetime.time.min)
+                )
+            
+            query = query.order_by(DiscussionStructure.created_at.desc())
+            
+            results = []
+            for disc in query:
+                # 最新メッセージを取得
+                last_message = (mm.select()
+                              .where(mm.discussion == disc)
+                              .order_by(mm.created_at.desc())
+                              .first())
+                
+                results.append({
+                    "chat_uuid": disc.uuid,
+                    "created_at": disc.created_at.isoformat(),
+                    "last_message": last_message.content if last_message else "No messages"
+                })
+            
+            return results
+        except DoesNotExist:
+            return []
