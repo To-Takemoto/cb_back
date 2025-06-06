@@ -101,29 +101,6 @@ class ChatRepository(Protocol):
         """
         pass
     
-    def update_last_position(self, chat_uuid: str, user_uuid: str, node_id: str) -> None:
-        """
-        ユーザーの最後の位置（ノードID）を更新します。
-        
-        Args:
-            chat_uuid: チャットのUUID
-            user_uuid: ユーザーのUUID
-            node_id: 最後に訪れたノードのID
-        """
-        pass
-    
-    def get_last_position(self, chat_uuid: str, user_uuid: str) -> Optional[str]:
-        """
-        ユーザーの最後の位置（ノードID）を取得します。
-        
-        Args:
-            chat_uuid: チャットのUUID
-            user_uuid: ユーザーのUUID
-            
-        Returns:
-            Optional[str]: 最後に訪れたノードのID、存在しない場合はNone
-        """
-        pass
     
     def get_recent_chats(self, user_uuid: str, limit: int = 10) -> list[dict]:
         """

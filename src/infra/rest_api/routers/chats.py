@@ -9,11 +9,10 @@ from src.infra.logging_config import get_logger
 from ..schemas import (
     ChatCreateRequest, ChatCreateResponse,
     MessageRequest, MessageResponse,
-    SelectRequest, PathResponse,
     HistoryMessage, HistoryResponse,
     PaginationParams, PaginatedResponse,
     ChatMetadataResponse, UpdateChatRequest, EditMessageRequest,
-    SearchPaginationParams, TreeStructureResponse, TreeNode
+    SearchPaginationParams, TreeStructureResponse, TreeNode, CompleteChatDataResponse
 )
 from src.infra.auth import get_current_user
 from src.port.chat_repo import ChatRepository
@@ -71,9 +70,6 @@ async def send_message(
 
     msg = await interaction.continue_chat(req.content)
     
-    # 最後の位置を更新（アシスタントの応答ノードID）
-    chat_repo.update_last_position(chat_uuid, current_user_id, str(msg.uuid))
-    
     return MessageResponse(
         message_uuid=str(msg.uuid),
         content=msg.content
@@ -125,70 +121,8 @@ async def get_history(
         ]
     )
 
-@router.post("/{chat_uuid}/select")
-async def select_node(
-    chat_uuid: str,
-    req: SelectRequest,
-    current_user_id: str = Depends(get_current_user)
-):
-    """
-    特定のメッセージを選択し、以降の会話の親に設定する
-    """
-    from src.infra.di import get_llm_client
-    from ..dependencies import get_message_cache
-    
-    # Create user-specific chat repo and interaction
-    chat_repo = create_chat_repo_for_user(current_user_id)
-    llm_client = get_llm_client()
-    cache = get_message_cache()
-    interaction = ChatInteraction(chat_repo, llm_client, cache)
-    
-    try:
-        interaction.restart_chat(chat_uuid)
-        interaction.select_message(req.message_uuid)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception:
-        raise HTTPException(status_code=404, detail="Chat not found")
-    return {"detail": f"Selected {req.message_uuid}"}
 
-@router.get("/{chat_uuid}/path", response_model=PathResponse)
-async def get_path(
-    chat_uuid: str,
-    current_user_id: str = Depends(get_current_user)
-):
-    """
-    現在のノードまでのメッセージUUIDパスを取得する
-    """
-    from src.infra.di import get_llm_client
-    from ..dependencies import get_message_cache
-    
-    # Create user-specific chat repo and interaction
-    chat_repo = create_chat_repo_for_user(current_user_id)
-    llm_client = get_llm_client()
-    cache = get_message_cache()
-    interaction = ChatInteraction(chat_repo, llm_client, cache)
-    
-    try:
-        interaction.restart_chat(chat_uuid)
-    except Exception:
-        raise HTTPException(status_code=404, detail="Chat not found")
-    return PathResponse(path=[str(u) for u in interaction.structure.get_current_path()])
 
-@router.get("/{chat_uuid}/last-position")
-async def get_last_position(
-    chat_uuid: str,
-    current_user_id: str = Depends(get_current_user)
-):
-    """
-    ユーザーの最後の位置（ノードID）を取得する
-    """
-    chat_repo = create_chat_repo_for_user(current_user_id)
-    last_position = chat_repo.get_last_position(chat_uuid, current_user_id)
-    return {
-        "chat_uuid": chat_uuid,
-        "node_id": last_position
-    }
 
 @router.post("/{chat_uuid}/messages/{message_id}/retry", response_model=MessageResponse)
 async def retry_message(
@@ -214,9 +148,6 @@ async def retry_message(
         # メッセージIDからノードを選択してリトライ
         interaction.select_message(message_id)
         msg = await interaction.retry_last_message()
-        
-        # 最後の位置を更新
-        chat_repo.update_last_position(chat_uuid, current_user_id, str(msg.uuid))
         
         return MessageResponse(
             message_uuid=str(msg.uuid),
@@ -272,32 +203,6 @@ async def delete_chat(
     logger.info(f"Chat {chat_uuid} deleted by user {current_user_id}")
     return {"detail": f"Chat {chat_uuid} deleted successfully"}
 
-@router.get("/{chat_uuid}/current-node")
-async def get_current_node(
-    chat_uuid: str,
-    current_user_id: str = Depends(get_current_user)
-):
-    """
-    現在のノードIDを取得する
-    """
-    from src.infra.di import get_llm_client
-    from ..dependencies import get_message_cache
-    
-    # Create user-specific chat repo and interaction
-    chat_repo = create_chat_repo_for_user(current_user_id)
-    llm_client = get_llm_client()
-    cache = get_message_cache()
-    interaction = ChatInteraction(chat_repo, llm_client, cache)
-    
-    try:
-        interaction.restart_chat(chat_uuid)
-        current_node_id = interaction.structure.get_current_node_id()
-        return {
-            "chat_uuid": chat_uuid,
-            "node_id": current_node_id
-        }
-    except Exception:
-        raise HTTPException(status_code=404, detail="Chat not found")
 
 @router.get("/{chat_uuid}/search")
 async def search_messages(
@@ -397,13 +302,68 @@ async def delete_message(
         logger.error(f"Failed to delete message {message_id} in chat {chat_uuid}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to delete message")
 
+@router.get("/{chat_uuid}/complete", response_model=CompleteChatDataResponse)
+async def get_complete_chat_data(
+    chat_uuid: str,
+    current_user_id: str = Depends(get_current_user)
+):
+    """
+    チャットの全データを一括取得する（フロントエンド状態管理用）
+    メッセージ履歴、ツリー構造、メタデータを一度に返す
+    """
+    try:
+        # Create user-specific chat repo
+        chat_repo = create_chat_repo_for_user(current_user_id)
+        
+        # メタデータを取得してチャットの存在確認
+        metadata = chat_repo.get_chat_metadata(chat_uuid, current_user_id)
+        if not metadata:
+            raise HTTPException(status_code=404, detail="Chat not found")
+        
+        # ツリー構造全体を取得
+        tree_data = chat_repo.get_tree_structure(chat_uuid)
+        
+        # ツリーから全メッセージUUIDを抽出
+        all_uuids = []
+        def extract_uuids(node_data):
+            all_uuids.append(node_data['uuid'])
+            for child in node_data.get('children', []):
+                extract_uuids(child)
+        extract_uuids(tree_data)
+        
+        # 全メッセージを取得
+        messages_entities = chat_repo.get_history(all_uuids)
+        
+        # レスポンス構築
+        messages = [
+            HistoryMessage(
+                message_uuid=str(m.uuid),
+                role=m.role.value,
+                content=m.content
+            ) for m in messages_entities
+        ]
+        
+        return CompleteChatDataResponse(
+            chat_uuid=chat_uuid,
+            title=metadata.get('title', ''),
+            system_prompt=metadata.get('system_prompt'),
+            messages=messages,
+            tree_structure=TreeNode(**tree_data),
+            metadata=metadata
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get complete chat data for {chat_uuid}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get chat data")
+
 @router.get("/{chat_uuid}/tree", response_model=TreeStructureResponse)
 async def get_tree_structure(
     chat_uuid: str,
     current_user_id: str = Depends(get_current_user)
 ):
     """
-    チャットのツリー構造を取得する（フロントエンドレンダリング用）
+    チャットのツリー構造のみを取得する（レガシーサポート）
     """
     from src.infra.di import get_llm_client
     from ..dependencies import get_message_cache
@@ -421,13 +381,9 @@ async def get_tree_structure(
         # ツリー構造を取得
         tree_data = chat_repo.get_tree_structure(chat_uuid)
         
-        # 現在のノードIDを取得
-        current_node_uuid = str(interaction.structure.current_node.uuid)
-        
         return TreeStructureResponse(
             chat_uuid=chat_uuid,
-            tree=TreeNode(**tree_data),
-            current_node_uuid=current_node_uuid
+            tree=TreeNode(**tree_data)
         )
     except Exception as e:
         logger.error(f"Failed to get tree structure for chat {chat_uuid}", exc_info=True)

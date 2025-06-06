@@ -36,7 +36,7 @@ def test_all_required_endpoints_exist():
         "GET /api/v1/chats/{chat_uuid}/messages",
         
         # New UX features
-        "GET /api/v1/chats/{chat_uuid}/last-position",
+        "GET /api/v1/chats/{chat_uuid}/complete",
         "POST /api/v1/chats/{chat_uuid}/messages/{message_id}/retry",
         "GET /api/v1/chats/recent",
         "DELETE /api/v1/chats/{chat_uuid}",

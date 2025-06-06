@@ -6,7 +6,7 @@ import datetime
 from ...domain.entity.chat_tree import ChatTree, ChatStructure
 from ...domain.entity.message_entity import MessageEntity, Role
 from ...port.dto.message_dto import MessageDTO
-from .peewee_models import User, LLMDetails, DiscussionStructure, db_proxy, UserChatPosition
+from .peewee_models import User, LLMDetails, DiscussionStructure, db_proxy
 from .peewee_models import Message as mm
 
 class ChatRepo:
@@ -124,53 +124,6 @@ class ChatRepo:
             )
         return results
     
-    def update_last_position(self, chat_uuid: str, user_uuid: str, node_id: str) -> None:
-        """ユーザーの最後の位置を更新"""
-        try:
-            # ユーザーをUUIDから取得
-            user = User.get(User.uuid == user_uuid)
-            discussion = DiscussionStructure.get(DiscussionStructure.uuid == chat_uuid)
-            
-            # Upsert: 存在すれば更新、なければ作成
-            position, created = UserChatPosition.get_or_create(
-                user=user,
-                discussion=discussion,
-                defaults={'last_node_id': node_id}
-            )
-            
-            if not created:
-                position.last_node_id = node_id
-                position.updated_at = datetime.datetime.now()
-                position.save()
-                
-        except DoesNotExist:
-            # ユーザーまたはディスカッションが存在しない場合は何もしない
-            pass
-        except Exception as e:
-            # テーブルが存在しない場合や他のエラーをキャッチ
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"Failed to update last position: {e}")
-            pass
-    
-    def get_last_position(self, chat_uuid: str, user_uuid: str) -> Optional[str]:
-        """ユーザーの最後の位置を取得"""
-        try:
-            user = User.get(User.uuid == user_uuid)
-            discussion = DiscussionStructure.get(DiscussionStructure.uuid == chat_uuid)
-            position = UserChatPosition.get(
-                UserChatPosition.user == user,
-                UserChatPosition.discussion == discussion
-            )
-            return position.last_node_id
-        except DoesNotExist:
-            return None
-        except Exception as e:
-            # テーブルが存在しない場合や他のエラーをキャッチ
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"Failed to get last position: {e}")
-            return None
     
     def get_recent_chats(self, user_uuid: str, limit: int = 10) -> list[dict]:
         """ユーザーの最近のチャット一覧を取得"""
@@ -219,8 +172,6 @@ class ChatRepo:
             
             mm.delete().where(mm.discussion == discussion).execute()
             
-            # ユーザーの位置情報を削除
-            UserChatPosition.delete().where(UserChatPosition.discussion == discussion).execute()
             
             # ディスカッション構造を削除
             discussion.delete_instance()

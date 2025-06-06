@@ -14,12 +14,6 @@ class MessageResponse(BaseModel):
     message_uuid: str
     content: str
 
-class SelectRequest(BaseModel):
-    message_uuid: str
-
-class PathResponse(BaseModel):
-    path: List[str]
-
 class HistoryMessage(BaseModel):
     message_uuid: str
     role: str
@@ -27,6 +21,20 @@ class HistoryMessage(BaseModel):
 
 class HistoryResponse(BaseModel):
     messages: List[HistoryMessage]
+
+class TreeNode(BaseModel):
+    uuid: str
+    role: str
+    content: str
+    children: List['TreeNode']
+
+class CompleteChatDataResponse(BaseModel):
+    chat_uuid: str
+    title: str
+    system_prompt: Optional[str]
+    messages: List[HistoryMessage]
+    tree_structure: TreeNode
+    metadata: dict
 
 class PaginationParams(BaseModel):
     page: int = Field(default=1, ge=1)
@@ -60,13 +68,6 @@ class SearchPaginationParams(BaseModel):
     sort: Optional[str] = Field(default="updated_at.desc")
     q: Optional[str] = None
 
-class TreeNode(BaseModel):
-    uuid: str
-    role: str
-    content: str
-    children: List['TreeNode']
-
 class TreeStructureResponse(BaseModel):
     chat_uuid: str
     tree: TreeNode
-    current_node_uuid: str

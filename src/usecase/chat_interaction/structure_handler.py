@@ -31,6 +31,16 @@ class StructureHandle:
     
     def get_chat_tree(self) -> ChatStructure:
         return self.chat_tree
+    
+    def get_all_node_uuids(self) -> list[str]:
+        """ツリー内の全ノードのUUIDを取得"""
+        all_uuids = []
+        def recurse(node):
+            all_uuids.append(str(node.uuid))
+            for child in node.children:
+                recurse(child)
+        recurse(self.chat_tree.tree)
+        return all_uuids
         
     def _set_latest(self) -> None:
         latest_message = self.chat_repo.get_latest_message_by_discussion(self.chat_tree.uuid)

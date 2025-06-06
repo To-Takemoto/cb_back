@@ -5,25 +5,21 @@
 
 
 def test_requirement_1_session_recovery():
-    """要件1: セッション復帰機能（最後の位置記憶）"""
+    """要件1: セッション復帰機能（フロントエンド状態管理に移行）"""
     
-    # ✅ APIエンドポイントの存在確認
+    # ✅ 新しい一括データ取得APIの存在確認
     from src.infra.rest_api.main import app
     routes = [route.path for route in app.routes if hasattr(route, 'path')]
-    assert "/api/v1/chats/{chat_uuid}/last-position" in routes
+    assert "/api/v1/chats/{chat_uuid}/complete" in routes
     
-    # ✅ データベースモデルの存在確認
-    from src.infra.sqlite_client.peewee_models import UserChatPosition
-    assert hasattr(UserChatPosition, 'user')
-    assert hasattr(UserChatPosition, 'discussion')
-    assert hasattr(UserChatPosition, 'last_node_id')
+    # ✅ フロントエンド向けのデータ構造確認
+    from src.infra.rest_api.schemas import CompleteChatDataResponse
+    assert hasattr(CompleteChatDataResponse, 'chat_uuid')
+    assert hasattr(CompleteChatDataResponse, 'messages')
+    assert hasattr(CompleteChatDataResponse, 'tree_structure')
+    assert hasattr(CompleteChatDataResponse, 'metadata')
     
-    # ✅ リポジトリメソッドの存在確認
-    from src.infra.sqlite_client.chat_repo import ChatRepo
-    assert hasattr(ChatRepo, 'update_last_position')
-    assert hasattr(ChatRepo, 'get_last_position')
-    
-    print("✅ 要件1: セッション復帰機能 - 実装完了")
+    print("✅ 要件1: セッション復帰機能 - フロントエンド状態管理へ移行完了")
 
 
 def test_requirement_2_retry_functionality():
@@ -57,7 +53,7 @@ def test_requirement_3_navigation():
     routes = [route.path for route in app.routes if hasattr(route, 'path')]
     assert "/api/v1/chats/recent" in routes
     assert "/api/v1/chats/{chat_uuid}" in routes  # DELETE
-    assert "/api/v1/chats/{chat_uuid}/current-node" in routes
+    assert "/api/v1/chats/{chat_uuid}/tree" in routes
     
     # ✅ リポジトリメソッドの存在確認
     from src.infra.sqlite_client.chat_repo import ChatRepo
@@ -136,11 +132,11 @@ def test_overall_requirements_satisfaction():
                     routes.append(f"{method} {route.path}")
     
     new_endpoints = [
-        "GET /api/v1/chats/{chat_uuid}/last-position",
+        "GET /api/v1/chats/{chat_uuid}/complete",
         "POST /api/v1/chats/{chat_uuid}/messages/{message_id}/retry",
         "GET /api/v1/chats/recent",
         "DELETE /api/v1/chats/{chat_uuid}",
-        "GET /api/v1/chats/{chat_uuid}/current-node",
+        "GET /api/v1/chats/{chat_uuid}/tree",
         "GET /api/v1/chats/{chat_uuid}/search",
         "GET /api/v1/chats/",
     ]
@@ -148,9 +144,10 @@ def test_overall_requirements_satisfaction():
     for endpoint in new_endpoints:
         assert endpoint in routes, f"Missing endpoint: {endpoint}"
     
-    # ✅ データベーススキーマ拡張
-    from src.infra.sqlite_client.peewee_models import UserChatPosition
-    assert UserChatPosition is not None
+    # ✅ 新しいAPI設計確認（フロントエンド状態管理）
+    from src.infra.rest_api.schemas import CompleteChatDataResponse, TreeNode
+    assert CompleteChatDataResponse is not None
+    assert TreeNode is not None
     
     # ✅ エラーハンドリング改善
     assert len(app.exception_handlers) >= 5

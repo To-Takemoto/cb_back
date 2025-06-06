@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 
 import os
 
-from .peewee_models import User, Message, LLMDetails, DiscussionStructure, UserChatPosition, db_proxy
+from .peewee_models import User, Message, LLMDetails, DiscussionStructure, db_proxy
 
 # データベース設定
 db = SqliteDatabase("data/sqlite.db")
@@ -11,7 +11,7 @@ db_proxy.initialize(db)
 
 # テーブルの作成
 db.connect()
-db.create_tables([User, Message, LLMDetails, DiscussionStructure, UserChatPosition])
+db.create_tables([User, Message, LLMDetails, DiscussionStructure])
         
 
 load_dotenv()
