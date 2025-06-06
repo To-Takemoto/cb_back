@@ -1,31 +1,81 @@
+from functools import lru_cache
+from typing import Optional
 from ..usecase.chat_interaction.message_cache import MessageCache
 from .sqlite_client.chat_repo import ChatRepo
 from .openrouter_client import OpenRouterLLMService
 from .sqlite_client.user_repository import SqliteUserRepository
 from .sqlite_client.peewee_models import User
+from ..port.llm_client import LLMClient
+from ..port.chat_repo import ChatRepository
+from ..port.user_repository import UserRepository as UserRepositoryPort
 
+class DIContainer:
+    """依存性注入コンテナ"""
+    
+    def __init__(self):
+        self._llm_client: Optional[LLMClient] = None
+        self._message_cache: Optional[MessageCache] = None
+        self._user_repository: Optional[UserRepositoryPort] = None
+    
+    @property
+    def llm_client(self) -> LLMClient:
+        """LLMクライアントのシングルトンインスタンスを取得"""
+        if self._llm_client is None:
+            self._llm_client = OpenRouterLLMService(None, "google/gemini-2.0-flash-001")
+        return self._llm_client
+    
+    @property
+    def message_cache(self) -> MessageCache:
+        """メッセージキャッシュのシングルトンインスタンスを取得"""
+        if self._message_cache is None:
+            self._message_cache = MessageCache()
+        return self._message_cache
+    
+    @property
+    def user_repository(self) -> UserRepositoryPort:
+        """ユーザーリポジトリのシングルトンインスタンスを取得"""
+        if self._user_repository is None:
+            self._user_repository = SqliteUserRepository()
+        return self._user_repository
+    
+    def create_chat_repo_for_user(self, user_uuid: str) -> ChatRepository:
+        """指定されたユーザー用のChatRepoインスタンスを作成"""
+        from peewee import DoesNotExist
+        from ..domain.exception.user_exceptions import UserNotFoundError
+        
+        try:
+            user = User.get(User.uuid == user_uuid)
+            return ChatRepo(user_id=user.id)
+        except DoesNotExist:
+            raise UserNotFoundError(f"User not found: {user_uuid}")
+
+# グローバルDIコンテナインスタンス
+_container = DIContainer()
 
 def get_chat_repo_client():
-    # This is a legacy function that shouldn't be used for authenticated endpoints
+    """レガシー関数：認証が必要なエンドポイントでは使用しない"""
     return ChatRepo(user_id=1)
 
+def create_chat_repo_for_user(user_uuid: str) -> ChatRepository:
+    """指定されたユーザー用のChatRepoインスタンスを作成"""
+    return _container.create_chat_repo_for_user(user_uuid)
 
-def create_chat_repo_for_user(user_uuid: str) -> ChatRepo:
-    """Create a ChatRepo instance for a specific user UUID"""
-    user = User.get(User.uuid == user_uuid)
-    return ChatRepo(user_id=user.id)
+def get_llm_client() -> LLMClient:
+    """LLMクライアントを取得"""
+    return _container.llm_client
 
-
-def get_llm_client():
-    return OpenRouterLLMService(None, "google/gemini-2.0-flash-001")
-
-
-def generate_message_cache():
+def generate_message_cache() -> MessageCache:
+    """レガシー関数：新しいコードではget_message_cacheを使用"""
     return MessageCache()
 
+def get_message_cache() -> MessageCache:
+    """メッセージキャッシュを取得"""
+    return _container.message_cache
 
-def get_user_repository():
-    """
-    UserRepositoryの取得
-    """
-    return SqliteUserRepository()
+def get_user_repository() -> UserRepositoryPort:
+    """ユーザーリポジトリを取得"""
+    return _container.user_repository
+
+def get_container() -> DIContainer:
+    """DIコンテナを取得（テスト用）"""
+    return _container

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional
 import asyncio
 
-from ..dependencies import get_chat_repo_client
+from ..dependencies import get_message_cache_dependency, get_llm_client_dependency
 from src.infra.di import create_chat_repo_for_user
 from src.usecase.chat_interaction.main import ChatInteraction
 from src.infra.logging_config import get_logger
@@ -27,18 +27,15 @@ logger = get_logger("api.chats")
 @router.post("/", response_model=ChatCreateResponse)
 async def create_chat(
     req: ChatCreateRequest,
-    current_user_id: str = Depends(get_current_user)
+    current_user_id: str = Depends(get_current_user),
+    llm_client = Depends(get_llm_client_dependency),
+    cache = Depends(get_message_cache_dependency)
 ):
     """
     新しいチャットを開始し、チャットUUIDを返す
     """
-    from src.infra.di import get_llm_client
-    from ..dependencies import get_message_cache
-    
     # Create user-specific chat repo and interaction
     chat_repo = create_chat_repo_for_user(current_user_id)
-    llm_client = get_llm_client()
-    cache = get_message_cache()
     interaction = ChatInteraction(chat_repo, llm_client, cache)
     
     # 初期メッセージがNoneの場合は空文字列を渡す
@@ -49,18 +46,16 @@ async def create_chat(
 async def send_message(
     chat_uuid: str,
     req: MessageRequest,
-    current_user_id: str = Depends(get_current_user)
+    current_user_id: str = Depends(get_current_user),
+    llm_client = Depends(get_llm_client_dependency),
+    cache = Depends(get_message_cache_dependency)
 ):
     """
     既存チャットにメッセージを送信し、アシスタントの応答を返す
+    parent_message_uuidが指定されている場合、その親から分岐させる
     """
-    from src.infra.di import get_llm_client
-    from ..dependencies import get_message_cache
-    
     # Create user-specific chat repo and interaction
     chat_repo = create_chat_repo_for_user(current_user_id)
-    llm_client = get_llm_client()
-    cache = get_message_cache()
     interaction = ChatInteraction(chat_repo, llm_client, cache)
     
     try:
@@ -68,28 +63,44 @@ async def send_message(
     except Exception:
         raise HTTPException(status_code=404, detail="Chat not found")
 
+    # 新機能: 親メッセージが指定されていれば選択
+    if req.parent_message_uuid:
+        try:
+            interaction.select_message(req.parent_message_uuid)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid parent message UUID")
+
     msg = await interaction.continue_chat(req.content)
     
-    return MessageResponse(
-        message_uuid=str(msg.uuid),
-        content=msg.content
-    )
+    # レスポンスに親ノード情報を含める
+    response_data = {
+        "message_uuid": str(msg.uuid),
+        "content": msg.content
+    }
+    
+    # 親ノードとパス情報を追加
+    try:
+        if hasattr(interaction.structure.current_node, 'parent') and interaction.structure.current_node.parent:
+            response_data["parent_message_uuid"] = str(interaction.structure.current_node.parent.uuid)
+        response_data["current_path"] = [str(u) for u in interaction.structure.get_current_path()]
+    except Exception:
+        # エラー時は基本情報のみ返す
+        pass
+    
+    return MessageResponse(**response_data)
 
 @router.get("/{chat_uuid}/messages", response_model=HistoryResponse)
 async def get_history(
     chat_uuid: str,
-    current_user_id: str = Depends(get_current_user)
+    current_user_id: str = Depends(get_current_user),
+    llm_client = Depends(get_llm_client_dependency),
+    cache = Depends(get_message_cache_dependency)
 ):
     """
     指定チャットの全メッセージ履歴を返却
     """
-    from src.infra.di import get_llm_client
-    from ..dependencies import get_message_cache
-    
     # Create user-specific chat repo and interaction
     chat_repo = create_chat_repo_for_user(current_user_id)
-    llm_client = get_llm_client()
-    cache = get_message_cache()
     interaction = ChatInteraction(chat_repo, llm_client, cache)
     
     try:
@@ -128,18 +139,15 @@ async def get_history(
 async def retry_message(
     chat_uuid: str,
     message_id: str,
-    current_user_id: str = Depends(get_current_user)
+    current_user_id: str = Depends(get_current_user),
+    llm_client = Depends(get_llm_client_dependency),
+    cache = Depends(get_message_cache_dependency)
 ):
     """
     失敗したメッセージを再試行する
     """
-    from src.infra.di import get_llm_client
-    from ..dependencies import get_message_cache
-    
     # Create user-specific chat repo and interaction
     chat_repo = create_chat_repo_for_user(current_user_id)
-    llm_client = get_llm_client()
-    cache = get_message_cache()
     interaction = ChatInteraction(chat_repo, llm_client, cache)
     
     try:
@@ -360,19 +368,16 @@ async def get_complete_chat_data(
 @router.get("/{chat_uuid}/tree", response_model=TreeStructureResponse)
 async def get_tree_structure(
     chat_uuid: str,
-    current_user_id: str = Depends(get_current_user)
+    current_user_id: str = Depends(get_current_user),
+    llm_client = Depends(get_llm_client_dependency),
+    cache = Depends(get_message_cache_dependency)
 ):
     """
     チャットのツリー構造のみを取得する（レガシーサポート）
     """
-    from src.infra.di import get_llm_client
-    from ..dependencies import get_message_cache
-    
     try:
         # Create user-specific chat repo and interaction
         chat_repo = create_chat_repo_for_user(current_user_id)
-        llm_client = get_llm_client()
-        cache = get_message_cache()
         interaction = ChatInteraction(chat_repo, llm_client, cache)
         
         # チャットの存在確認とロード

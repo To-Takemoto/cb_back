@@ -12,11 +12,20 @@ class SqliteUserRepository(UserRepository):
     """
     Peewee/SQLite を用いた UserRepository の実装
     """
-    def __init__(self, db_path: str = "data/sqlite.db"):
-        db = SqliteDatabase(db_path)
-        db_proxy.initialize(db)
-        db.connect()
-        db.create_tables([UserModel])
+    def __init__(self, db_path: str = "./data/chat_app.db"):
+        # データベースプロキシが既に初期化されていない場合のみ初期化
+        if not db_proxy.obj:
+            import os
+            
+            # データベースディレクトリが存在しない場合は作成
+            db_dir = os.path.dirname(db_path)
+            if db_dir and not os.path.exists(db_dir):
+                os.makedirs(db_dir, exist_ok=True)
+            
+            db = SqliteDatabase(db_path)
+            db_proxy.initialize(db)
+            db.connect()
+            db.create_tables([UserModel])
 
     def exists_by_username(self, username: str) -> bool:
         return UserModel.select().where(UserModel.name == username).exists()

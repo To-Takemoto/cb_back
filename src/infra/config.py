@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = Field(default=30)
     
     # Database
-    database_url: str = Field(default="sqlite:///./chat_app.db")
+    database_url: str = Field(default="sqlite:///./data/chat_app.db")
     
     # Environment
     environment: str = Field(default="development")

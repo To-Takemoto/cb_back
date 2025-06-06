@@ -7,7 +7,6 @@ from peewee import (
     DateTimeField,
     BlobField
     )
-import bcrypt
 
 from uuid import uuid4
 import datetime
@@ -23,8 +22,8 @@ class User(Model):
     def save(self, *args, **kwargs):
         # 新規作成時にパスワードをハッシュ化
         if self._pk is None:
-            hashed = bcrypt.hashpw(self.password.encode('utf-8'), bcrypt.gensalt())
-            self.password = hashed.decode('utf-8')
+            from src.infra.auth import get_password_hash
+            self.password = get_password_hash(self.password)
         return super().save(*args, **kwargs)
 
     class Meta:

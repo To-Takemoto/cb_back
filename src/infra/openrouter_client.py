@@ -40,7 +40,7 @@ class OpenRouterLLMService:
             "HTTP-Referer": "null_po",
             "X-Title": "cb_back_local"
         }
-        self.client = None
+        self._client = None
             
     def set_model(self, model_name: str) -> None:
         """
@@ -66,7 +66,8 @@ class OpenRouterLLMService:
             値が設定されません。これらの値はアプリケーション層または
             サービス層で設定する必要があります。
         """
-        self.client = httpx.AsyncClient()
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=30.0)
 
         message_dict_list = format_api_input.format_entity_list_to_dict_list(messages)
         
@@ -80,21 +81,26 @@ class OpenRouterLLMService:
             "max_tokens": 1000   # デフォルト値
         }
         try:
-            response = await self.client.post(
+            response = await self._client.post(
                 url, 
                 headers=self.headers, 
                 json=data,
             )
-            response.raise_for_status()  # エラーが発生した場合は例外を発生させる
+            response.raise_for_status()
             response_data = response.json()
-            # 応答からコンテンツを抽出
-
+            
             flatten_response_data = format_api_response.flatten_api_response(response_data)
-
             return flatten_response_data
             
+        except httpx.TimeoutException:
+            raise TimeoutError("LLM API request timed out")
+        except httpx.HTTPStatusError as e:
+            raise ConnectionError(f"LLM API error: {e.response.status_code}")
         except Exception as e:
             raise e
-        
-        finally:
-            await self.client.aclose()
+    
+    async def aclose(self):
+        """HTTPクライアントを閉じる"""
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None

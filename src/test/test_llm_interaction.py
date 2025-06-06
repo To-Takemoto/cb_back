@@ -4,9 +4,9 @@ from anytree.render import AsciiStyle
 import time
 import asyncio
 
-from ..infra.openrouter_client import OpenRouterLLMService
-from ..usecase.chat_interaction.main import ChatInteraction
-from ..infra.sqlite_client.main import SqliteClient
+from src.infra.openrouter_client import OpenRouterLLMService
+from src.usecase.chat_interaction.main import ChatInteraction
+from src.infra.sqlite_client.chat_repo import ChatRepo
 
 
 async def starter():

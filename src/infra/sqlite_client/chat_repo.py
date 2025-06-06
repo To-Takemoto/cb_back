@@ -1,6 +1,6 @@
 import uuid as uuidGen
-from peewee import SqliteDatabase, DoesNotExist
-from typing import Optional
+from peewee import SqliteDatabase, DoesNotExist, fn, JOIN
+from typing import Optional, Tuple, List, Dict, Any
 import datetime
 
 from ...domain.entity.chat_tree import ChatTree, ChatStructure
@@ -11,24 +11,42 @@ from .peewee_models import Message as mm
 
 class ChatRepo:
     def __init__(self, user_id: int):
-        # DB接続・初期化
-        db = SqliteDatabase("data/sqlite.db")
-        db_proxy.initialize(db)
-        db.connect()
-        self.user = User.get_by_id(user_id)
+        # データベースプロキシが既に初期化されていない場合のみ初期化
+        if not db_proxy.obj:
+            from ...infra.config import Settings
+            import os
+            settings = Settings()
+            db_path = settings.database_url.replace("sqlite:///", "")
+            
+            # データベースディレクトリが存在しない場合は作成
+            db_dir = os.path.dirname(db_path)
+            if db_dir and not os.path.exists(db_dir):
+                os.makedirs(db_dir, exist_ok=True)
+            
+            db = SqliteDatabase(db_path)
+            db_proxy.initialize(db)
+            if not db.is_closed():
+                db.connect()
+        
+        self.user_id = user_id
+        self._user_cache = None
 
     def save_message(
         self,
         discussion_structure_uuid: str,
         message_dto: MessageDTO,
-        llm_details: dict | None = None
+        llm_details: Optional[dict] = None
     ) -> MessageEntity:
         """
         メッセージを保存し、MessageEntityを返却
         """
-        target_structure = DiscussionStructure.get(
-            DiscussionStructure.uuid == discussion_structure_uuid
-        )
+        try:
+            target_structure = DiscussionStructure.get(
+                DiscussionStructure.uuid == discussion_structure_uuid
+            )
+        except DoesNotExist:
+            raise ValueError(f"Discussion structure not found: {discussion_structure_uuid}")
+        
         # ForeignKeyはIDで指定
         inserted = mm.create(
             discussion=target_structure,
@@ -55,13 +73,14 @@ class ChatRepo:
             return Role.SYSTEM
         raise ValueError(f"想定外のrole; {role}")
 
-    def init_structure(self, initial_message_dto: MessageDTO) -> tuple[ChatTree, MessageEntity]:
+    def init_structure(self, initial_message_dto: MessageDTO) -> Tuple[ChatTree, MessageEntity]:
         """
         新規チャット構造を作成し、初期メッセージを保存
         """
         # DiscussionStructureを作成
+        user = self._get_user()
         base = DiscussionStructure.create(
-            user=self.user,
+            user=user,
             uuid=uuidGen.uuid4(),
             serialized_structure=b""
         )
@@ -107,8 +126,8 @@ class ChatRepo:
             content=last.content
         )
 
-    def get_history(self, message_uuids: list[str]) -> list[MessageEntity]:
-        results: list[MessageEntity] = []
+    def get_history(self, message_uuids: List[str]) -> List[MessageEntity]:
+        results: List[MessageEntity] = []
         for u in message_uuids:
             try:
                 msg = mm.get(mm.uuid == u)
@@ -124,32 +143,50 @@ class ChatRepo:
             )
         return results
     
+    def _get_user(self) -> User:
+        """ユーザー情報をキャッシュして取得"""
+        if self._user_cache is None:
+            try:
+                self._user_cache = User.get_by_id(self.user_id)
+            except DoesNotExist:
+                raise ValueError(f"User not found: {self.user_id}")
+        return self._user_cache
     
-    def get_recent_chats(self, user_uuid: str, limit: int = 10) -> list[dict]:
-        """ユーザーの最近のチャット一覧を取得"""
+    def get_recent_chats(self, user_uuid: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """ユーザーの最近のチャット一覧を取得（最適化版）"""
         try:
             user = User.get(User.uuid == user_uuid)
-            discussions = (DiscussionStructure
-                         .select()
-                         .where(DiscussionStructure.user == user)
-                         .order_by(DiscussionStructure.created_at.desc())
-                         .limit(limit))
+            
+            # JOINを使用してN+1問題を解決
+            discussions_with_counts = (DiscussionStructure
+                .select(
+                    DiscussionStructure,
+                    fn.COUNT(mm.id).alias('message_count'),
+                    fn.MIN(mm.content).alias('first_message_content')
+                )
+                .join(mm, JOIN.LEFT_OUTER)
+                .where(DiscussionStructure.user == user)
+                .group_by(DiscussionStructure.id)
+                .order_by(DiscussionStructure.created_at.desc())
+                .limit(limit))
             
             result = []
-            for disc in discussions:
-                # メッセージ数をカウント
-                message_count = mm.select().where(mm.discussion == disc).count()
-                
-                # 最初のメッセージからタイトルを生成（または専用フィールドがあれば使用）
-                first_message = mm.select().where(mm.discussion == disc).order_by(mm.created_at).first()
-                title = first_message.content[:50] + "..." if first_message and len(first_message.content) > 50 else (first_message.content if first_message else "New Chat")
+            for disc in discussions_with_counts:
+                # タイトル生成
+                first_content = getattr(disc, 'first_message_content', None)
+                if disc.title:
+                    title = disc.title
+                elif first_content:
+                    title = first_content[:50] + "..." if len(first_content) > 50 else first_content
+                else:
+                    title = "New Chat"
                 
                 result.append({
                     "uuid": disc.uuid,
                     "title": title,
                     "created_at": disc.created_at.isoformat(),
-                    "updated_at": disc.created_at.isoformat(),  # TODO: 更新日時を別途管理する場合は修正
-                    "message_count": message_count
+                    "updated_at": getattr(disc, 'updated_at', disc.created_at).isoformat(),
+                    "message_count": getattr(disc, 'message_count', 0)
                 })
             
             return result

@@ -1,8 +1,18 @@
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from typing import Dict, Any
 import asyncio
 from src.infra.logging_config import get_logger
+from ...domain.exception.chat_exceptions import (
+    ChatException,
+    ChatNotFoundError,
+    MessageNotFoundError,
+    InvalidTreeStructureError,
+    LLMServiceError,
+    AccessDeniedError
+)
+from ...domain.exception.user_exceptions import UserNotFoundError
 
 logger = get_logger("api.errors")
 
@@ -128,6 +138,73 @@ async def handle_permission_error(request: Request, exc: PermissionError):
         retry_available=False
     )
 
+
+async def handle_chat_exception(request: Request, exc: ChatException):
+    """チャット例外のハンドリング"""
+    status_code_map = {
+        ChatNotFoundError: status.HTTP_404_NOT_FOUND,
+        MessageNotFoundError: status.HTTP_404_NOT_FOUND,
+        AccessDeniedError: status.HTTP_403_FORBIDDEN,
+        InvalidTreeStructureError: status.HTTP_400_BAD_REQUEST,
+        LLMServiceError: status.HTTP_502_BAD_GATEWAY,
+    }
+    
+    status_code = status_code_map.get(type(exc), status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    logger.warning(
+        f"Chat exception: {exc.__class__.__name__}",
+        extra={
+            "path": request.url.path,
+            "method": request.method,
+            "error_code": exc.error_code,
+            "error": str(exc)
+        }
+    )
+    
+    return create_error_response(
+        error_type=exc.error_code or "chat_error",
+        user_message=str(exc),
+        status_code=status_code,
+        retry_available=isinstance(exc, LLMServiceError)
+    )
+
+async def handle_validation_exception(request: Request, exc: RequestValidationError):
+    """FastAPIバリデーションエラーのハンドリング"""
+    logger.warning(
+        "FastAPI validation error",
+        extra={
+            "path": request.url.path,
+            "method": request.method,
+            "errors": exc.errors()
+        }
+    )
+    
+    return create_error_response(
+        error_type="validation_error",
+        user_message="入力データが無効です",
+        detail=exc.errors(),
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        retry_available=False
+    )
+
+async def handle_user_not_found_error(request: Request, exc: UserNotFoundError):
+    """ユーザーが見つからない場合のエラーハンドリング"""
+    logger.warning(
+        "User not found",
+        extra={
+            "path": request.url.path,
+            "method": request.method,
+            "error": str(exc)
+        }
+    )
+    
+    return create_error_response(
+        error_type="user_not_found",
+        user_message="ユーザーが見つかりません。再度ログインしてください。",
+        detail=str(exc),
+        status_code=status.HTTP_404_NOT_FOUND,
+        retry_available=False
+    )
 
 async def handle_generic_error(request: Request, exc: Exception):
     """その他のエラーのハンドリング"""

@@ -13,7 +13,10 @@ from .error_handlers import (
     handle_connection_error,
     handle_validation_error,
     handle_permission_error,
-    handle_generic_error
+    handle_generic_error,
+    handle_chat_exception,
+    handle_validation_exception,
+    handle_user_not_found_error
 )
 from .rate_limiter import limiter, rate_limit_error_handler
 
@@ -49,7 +52,26 @@ app.include_router(users_router)
 
 @app.on_event("startup")
 async def startup_event():
+    """アプリケーション起動時の初期化処理"""
     logger.info("Application starting up", extra={"environment": settings.environment})
+    
+    # データベース接続の初期化
+    from src.infra.sqlite_client.peewee_models import db_proxy
+    from peewee import SqliteDatabase
+    import os
+    
+    db_path = settings.database_url.replace("sqlite:///", "")
+    
+    # データベースディレクトリが存在しない場合は作成
+    db_dir = os.path.dirname(db_path)
+    if db_dir and not os.path.exists(db_dir):
+        os.makedirs(db_dir, exist_ok=True)
+        logger.info("Created database directory", extra={"db_dir": db_dir})
+    
+    db = SqliteDatabase(db_path)
+    db_proxy.initialize(db)
+    
+    logger.info("Database connection initialized", extra={"db_path": db_path})
 
 @app.get("/api/v1/health")
 async def health_check():
@@ -57,6 +79,13 @@ async def health_check():
     return {"status": "healthy", "version": "0.1.0"}
 
 # エラーハンドラーの登録
+from src.domain.exception.chat_exceptions import ChatException
+from src.domain.exception.user_exceptions import UserNotFoundError
+from fastapi.exceptions import RequestValidationError
+
+app.add_exception_handler(UserNotFoundError, handle_user_not_found_error)
+app.add_exception_handler(ChatException, handle_chat_exception)
+app.add_exception_handler(RequestValidationError, handle_validation_exception)
 app.add_exception_handler(asyncio.TimeoutError, handle_timeout_error)
 app.add_exception_handler(ConnectionError, handle_connection_error)
 app.add_exception_handler(ValueError, handle_validation_error)
