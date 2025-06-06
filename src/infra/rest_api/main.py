@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.infra.config import Settings
 from src.infra.logging_config import LoggingMiddleware, get_logger
 import asyncio
+from slowapi.errors import RateLimitExceeded
 
 from .routers.chats import router as chats_router
 from .routers.users import router as users_router
@@ -14,6 +15,7 @@ from .error_handlers import (
     handle_permission_error,
     handle_generic_error
 )
+from .rate_limiter import limiter, rate_limit_error_handler
 
 # Initialize settings and logger
 settings = Settings()
@@ -23,6 +25,10 @@ app = FastAPI(
     title="Chat LLM Service API",
     version="0.1.0"
 )
+
+# レート制限の設定
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_error_handler)
 
 # Add logging middleware
 app.add_middleware(LoggingMiddleware)
@@ -44,6 +50,11 @@ app.include_router(users_router)
 @app.on_event("startup")
 async def startup_event():
     logger.info("Application starting up", extra={"environment": settings.environment})
+
+@app.get("/api/v1/health")
+async def health_check():
+    """ヘルスチェックエンドポイント"""
+    return {"status": "healthy", "version": "0.1.0"}
 
 # エラーハンドラーの登録
 app.add_exception_handler(asyncio.TimeoutError, handle_timeout_error)

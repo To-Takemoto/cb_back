@@ -31,8 +31,7 @@ class ChatRepo:
         )
         # ForeignKeyはIDで指定
         inserted = mm.create(
-            discussion_id=target_structure.id,
-            owner_id=self.user.id,
+            discussion=target_structure,
             uuid=uuidGen.uuid4(),
             role=message_dto.role.value,
             content=message_dto.content,
@@ -62,9 +61,9 @@ class ChatRepo:
         """
         # DiscussionStructureを作成
         base = DiscussionStructure.create(
-            owner_id=self.user.id,
+            user=self.user,
             uuid=uuidGen.uuid4(),
-            structure=b""
+            serialized_structure=b""
         )
         # 初期メッセージを保存
         saved_msg = self.save_message(base.uuid, initial_message_dto)
@@ -75,7 +74,7 @@ class ChatRepo:
             uuid=base.uuid,
             tree=ChatStructure(saved_msg.uuid, None)
         )
-        base.structure = new_tree.get_tree_bin()
+        base.serialized_structure = new_tree.get_tree_bin()
         base.save()
 
         return new_tree, saved_msg
@@ -83,12 +82,12 @@ class ChatRepo:
     def load_tree(self, uuid: str) -> ChatTree:
         record = DiscussionStructure.get(DiscussionStructure.uuid == uuid)
         tree = ChatTree(id=record.id, uuid=record.uuid, tree=None)
-        tree.revert_tree_from_bin(record.structure)
+        tree.revert_tree_from_bin(record.serialized_structure)
         return tree
 
     def update_tree(self, new_tree: ChatTree) -> None:
         record = DiscussionStructure.get(DiscussionStructure.uuid == new_tree.uuid)
-        record.structure = new_tree.get_tree_bin()
+        record.serialized_structure = new_tree.get_tree_bin()
         record.save()
 
     def get_latest_message_by_discussion(self, discussion_uuid: str) -> MessageEntity:
@@ -147,6 +146,12 @@ class ChatRepo:
         except DoesNotExist:
             # ユーザーまたはディスカッションが存在しない場合は何もしない
             pass
+        except Exception as e:
+            # テーブルが存在しない場合や他のエラーをキャッチ
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to update last position: {e}")
+            pass
     
     def get_last_position(self, chat_uuid: str, user_uuid: str) -> Optional[str]:
         """ユーザーの最後の位置を取得"""
@@ -160,6 +165,12 @@ class ChatRepo:
             return position.last_node_id
         except DoesNotExist:
             return None
+        except Exception as e:
+            # テーブルが存在しない場合や他のエラーをキャッチ
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to get last position: {e}")
+            return None
     
     def get_recent_chats(self, user_uuid: str, limit: int = 10) -> list[dict]:
         """ユーザーの最近のチャット一覧を取得"""
@@ -167,7 +178,7 @@ class ChatRepo:
             user = User.get(User.uuid == user_uuid)
             discussions = (DiscussionStructure
                          .select()
-                         .where(DiscussionStructure.owner == user)
+                         .where(DiscussionStructure.user == user)
                          .order_by(DiscussionStructure.created_at.desc())
                          .limit(limit))
             
@@ -198,7 +209,7 @@ class ChatRepo:
             user = User.get(User.uuid == user_uuid)
             discussion = DiscussionStructure.get(
                 DiscussionStructure.uuid == chat_uuid,
-                DiscussionStructure.owner == user
+                DiscussionStructure.user == user
             )
             
             # 関連するメッセージとLLM詳細を削除
@@ -275,7 +286,7 @@ class ChatRepo:
             
             # クエリの構築
             query = DiscussionStructure.select().where(
-                DiscussionStructure.owner == user
+                DiscussionStructure.user == user
             )
             
             if date_filter == "today":
@@ -311,3 +322,252 @@ class ChatRepo:
             return results
         except DoesNotExist:
             return []
+    
+    def get_chat_metadata(self, chat_uuid: str, user_uuid: str) -> Optional[dict]:
+        """チャットのメタデータを取得"""
+        try:
+            user = User.get(User.uuid == user_uuid)
+            discussion = DiscussionStructure.get(
+                DiscussionStructure.uuid == chat_uuid,
+                DiscussionStructure.user == user
+            )
+            
+            # メッセージ数をカウント
+            message_count = mm.select().where(mm.discussion == discussion).count()
+            
+            # タイトルを生成（専用フィールドがあればそれを使用、なければ最初のメッセージから）
+            title = getattr(discussion, 'title', None)
+            if not title:
+                first_message = mm.select().where(mm.discussion == discussion).order_by(mm.created_at).first()
+                title = first_message.content[:50] + "..." if first_message and len(first_message.content) > 50 else (first_message.content if first_message else "New Chat")
+            
+            # updated_atフィールドが存在するかチェック
+            updated_at = getattr(discussion, 'updated_at', discussion.created_at)
+            
+            return {
+                "chat_uuid": discussion.uuid,
+                "title": title,
+                "created_at": discussion.created_at.isoformat(),
+                "updated_at": updated_at.isoformat(),
+                "message_count": message_count,
+                "owner_id": user.uuid
+            }
+        except DoesNotExist:
+            return None
+    
+    def update_chat(self, chat_uuid: str, user_uuid: str, title: Optional[str], system_prompt: Optional[str]) -> bool:
+        """チャットのタイトルやシステムプロンプトを更新"""
+        try:
+            user = User.get(User.uuid == user_uuid)
+            discussion = DiscussionStructure.get(
+                DiscussionStructure.uuid == chat_uuid,
+                DiscussionStructure.user == user
+            )
+            
+            updated = False
+            if title is not None:
+                discussion.title = title
+                updated = True
+            
+            if system_prompt is not None:
+                discussion.system_prompt = system_prompt
+                updated = True
+            
+            if updated:
+                discussion.updated_at = datetime.datetime.now()
+                discussion.save()
+            
+            return True
+        except DoesNotExist:
+            return False
+    
+    def edit_message(self, chat_uuid: str, message_id: str, user_uuid: str, content: str) -> bool:
+        """メッセージの内容を編集"""
+        try:
+            user = User.get(User.uuid == user_uuid)
+            discussion = DiscussionStructure.get(
+                DiscussionStructure.uuid == chat_uuid,
+                DiscussionStructure.user == user
+            )
+            
+            message = mm.get(
+                mm.uuid == message_id,
+                mm.discussion == discussion
+            )
+            
+            message.content = content
+            message.save()
+            
+            # チャットの更新日時も更新
+            discussion.updated_at = datetime.datetime.now()
+            discussion.save()
+            
+            return True
+        except DoesNotExist:
+            return False
+    
+    def delete_message(self, chat_uuid: str, message_id: str, user_uuid: str) -> bool:
+        """メッセージを削除"""
+        try:
+            user = User.get(User.uuid == user_uuid)
+            discussion = DiscussionStructure.get(
+                DiscussionStructure.uuid == chat_uuid,
+                DiscussionStructure.user == user
+            )
+            
+            message = mm.get(
+                mm.uuid == message_id,
+                mm.discussion == discussion
+            )
+            
+            # 関連するLLM詳細を削除
+            LLMDetails.delete().where(LLMDetails.message == message).execute()
+            
+            # メッセージを削除
+            message.delete_instance()
+            
+            # チャットの更新日時も更新
+            discussion.updated_at = datetime.datetime.now()
+            discussion.save()
+            
+            return True
+        except DoesNotExist:
+            return False
+    
+    def search_and_paginate_chats(self, user_uuid: str, query: Optional[str], sort: Optional[str], limit: int, offset: int) -> dict:
+        """チャットを検索・ソート・ページネーションで取得"""
+        try:
+            user = User.get(User.uuid == user_uuid)
+            
+            # ベースクエリ
+            base_query = DiscussionStructure.select().where(DiscussionStructure.user == user)
+            
+            # 検索条件を追加
+            if query:
+                # チャットタイトルまたはメッセージ内容で検索
+                message_discussions = (mm.select(mm.discussion)
+                                     .where(mm.content.contains(query))
+                                     .distinct())
+                
+                base_query = base_query.where(
+                    (DiscussionStructure.title.contains(query)) |
+                    (DiscussionStructure.id.in_(message_discussions))
+                )
+            
+            # ソート条件を追加
+            if sort:
+                if sort == "created_at.asc":
+                    base_query = base_query.order_by(DiscussionStructure.created_at.asc())
+                elif sort == "created_at.desc":
+                    base_query = base_query.order_by(DiscussionStructure.created_at.desc())
+                elif sort == "updated_at.asc":
+                    base_query = base_query.order_by(DiscussionStructure.updated_at.asc())
+                elif sort == "updated_at.desc":
+                    base_query = base_query.order_by(DiscussionStructure.updated_at.desc())
+                else:
+                    # デフォルトソート
+                    base_query = base_query.order_by(DiscussionStructure.updated_at.desc())
+            else:
+                base_query = base_query.order_by(DiscussionStructure.updated_at.desc())
+            
+            # 総数を取得
+            total_count = base_query.count()
+            
+            # ページネーション適用
+            paginated_query = base_query.limit(limit).offset(offset)
+            
+            # 結果を構築
+            results = []
+            for disc in paginated_query:
+                # メッセージ数をカウント
+                message_count = mm.select().where(mm.discussion == disc).count()
+                
+                # タイトルを取得
+                title = disc.title
+                if not title:
+                    first_message = mm.select().where(mm.discussion == disc).order_by(mm.created_at).first()
+                    title = first_message.content[:50] + "..." if first_message and len(first_message.content) > 50 else (first_message.content if first_message else "New Chat")
+                
+                results.append({
+                    "chat_uuid": disc.uuid,
+                    "title": title,
+                    "created_at": disc.created_at.isoformat(),
+                    "updated_at": disc.updated_at.isoformat(),
+                    "message_count": message_count
+                })
+            
+            return {
+                "items": results,
+                "total": total_count
+            }
+        except DoesNotExist:
+            return {
+                "items": [],
+                "total": 0
+            }
+    
+    def get_user_chat_count(self, user_uuid: str) -> int:
+        """
+        ユーザーの全チャット数を取得します。
+        """
+        try:
+            user = User.get(User.uuid == user_uuid)
+            return user.discussionstructure_set.count()
+        except DoesNotExist:
+            return 0
+    
+    def get_recent_chats_paginated(self, user_uuid: str, limit: int, offset: int) -> list[dict]:
+        """
+        ユーザーの最近のチャット一覧をページネーションで取得します。
+        """
+        try:
+            user = User.get(User.uuid == user_uuid)
+            query = (DiscussionStructure.select()
+                    .where(DiscussionStructure.user == user)
+                    .order_by(DiscussionStructure.created_at.desc())
+                    .limit(limit)
+                    .offset(offset))
+            
+            results = []
+            for disc in query:
+                # 最新メッセージを取得
+                last_message = (mm.select()
+                              .where(mm.discussion == disc)
+                              .order_by(mm.created_at.desc())
+                              .first())
+                
+                results.append({
+                    "chat_uuid": disc.uuid,
+                    "created_at": disc.created_at.isoformat(),
+                    "last_message": last_message.content if last_message else "No messages"
+                })
+            
+            return results
+        except DoesNotExist:
+            return []
+
+    def get_tree_structure(self, chat_uuid: str) -> dict:
+        """
+        チャットツリー構造を取得し、フロントエンド用の辞書形式で返す
+        """
+        tree = self.load_tree(chat_uuid)
+        
+        def convert_node_to_dict(node):
+            # メッセージの詳細情報を取得
+            try:
+                msg = mm.get(mm.uuid == str(node.uuid))
+                role = msg.role
+                content = msg.content
+            except DoesNotExist:
+                # メッセージが見つからない場合のデフォルト値
+                role = "unknown"
+                content = ""
+            
+            return {
+                "uuid": str(node.uuid),
+                "role": role,
+                "content": content,
+                "children": [convert_node_to_dict(child) for child in node.children]
+            }
+        
+        return convert_node_to_dict(tree.tree)

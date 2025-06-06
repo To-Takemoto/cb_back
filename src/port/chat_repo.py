@@ -176,3 +176,102 @@ class ChatRepository(Protocol):
             list[dict]: フィルタリングされたチャット情報のリスト
         """
         pass
+    
+    def get_user_chat_count(self, user_uuid: str) -> int:
+        """
+        ユーザーの全チャット数を取得します。
+        
+        Args:
+            user_uuid: ユーザーのUUID
+            
+        Returns:
+            int: チャットの総数
+        """
+        pass
+    
+    def get_recent_chats_paginated(self, user_uuid: str, limit: int, offset: int) -> list[dict]:
+        """
+        ユーザーの最近のチャット一覧をページネーションで取得します。
+        
+        Args:
+            user_uuid: ユーザーのUUID
+            limit: 取得する件数
+            offset: スキップする件数
+            
+        Returns:
+            list[dict]: チャット情報のリスト
+        """
+        pass
+    
+    def get_chat_metadata(self, chat_uuid: str, user_uuid: str) -> Optional[dict]:
+        """
+        チャットのメタデータを取得します。
+        
+        Args:
+            chat_uuid: チャットのUUID
+            user_uuid: ユーザーのUUID（権限確認用）
+            
+        Returns:
+            Optional[dict]: チャットのメタデータ、存在しない場合はNone
+        """
+        pass
+    
+    def update_chat(self, chat_uuid: str, user_uuid: str, title: Optional[str], system_prompt: Optional[str]) -> bool:
+        """
+        チャットのタイトルやシステムプロンプトを更新します。
+        
+        Args:
+            chat_uuid: チャットのUUID
+            user_uuid: ユーザーのUUID（権限確認用）
+            title: 新しいタイトル（Noneの場合は更新しない）
+            system_prompt: 新しいシステムプロンプト（Noneの場合は更新しない）
+            
+        Returns:
+            bool: 更新成功時True、失敗時False
+        """
+        pass
+    
+    def edit_message(self, chat_uuid: str, message_id: str, user_uuid: str, content: str) -> bool:
+        """
+        メッセージの内容を編集します。
+        
+        Args:
+            chat_uuid: チャットのUUID
+            message_id: メッセージのUUID
+            user_uuid: ユーザーのUUID（権限確認用）
+            content: 新しいメッセージ内容
+            
+        Returns:
+            bool: 編集成功時True、失敗時False
+        """
+        pass
+    
+    def delete_message(self, chat_uuid: str, message_id: str, user_uuid: str) -> bool:
+        """
+        メッセージを削除します。
+        
+        Args:
+            chat_uuid: チャットのUUID
+            message_id: メッセージのUUID
+            user_uuid: ユーザーのUUID（権限確認用）
+            
+        Returns:
+            bool: 削除成功時True、失敗時False
+        """
+        pass
+    
+    def search_and_paginate_chats(self, user_uuid: str, query: Optional[str], sort: Optional[str], limit: int, offset: int) -> dict:
+        """
+        チャットを検索・ソート・ページネーションで取得します。
+        
+        Args:
+            user_uuid: ユーザーのUUID
+            query: 検索クエリ（Noneの場合は全件取得）
+            sort: ソート条件（例: "updated_at.desc", "created_at.asc"）
+            limit: 取得する件数
+            offset: スキップする件数
+            
+        Returns:
+            dict: {"items": list[dict], "total": int} 形式の結果
+        """
+        pass

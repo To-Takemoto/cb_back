@@ -15,57 +15,7 @@ import datetime
 db_proxy = DatabaseProxy()
 
 class User(Model):
-    name = CharField(unique=True)
-    password = CharField()
-    created_at = DateTimeField(default=datetime.datetime.now)
-
-    def save(self, *args, **kwargs):
-        if self._pk is None:  # 新規作成時のみハッシュ化
-            self.password = bcrypt.hashpw(self.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-        super().save(*args, **kwargs)
-
-    class Meta:
-        database = db_proxy
-
-class DiscussionStructure(Model):
-    owner = ForeignKeyField(User, backref='discussions')
-    uuid = CharField()
-    structure = BlobField()
-    created_at = DateTimeField(default=datetime.datetime.now)
-
-    class Meta:
-        database = db_proxy
-
-class Message(Model):
-    discussion = ForeignKeyField(DiscussionStructure, backref='messages')
-    owner = ForeignKeyField(User, backref='user_messages')
-    uuid = CharField()
-    role = CharField()  # 'user', 'system', 'assistant' など
-    content = CharField()
-    created_at = DateTimeField(default=datetime.datetime.now)
-
-    class Meta:
-        database = db_proxy
-
-class LLMDetails(Model):
-    message = ForeignKeyField(Message, backref='llm_details')
-    gen_id = CharField() 
-    provider = CharField()
-    object_ = CharField()
-    created = CharField()
-    finish_reason = CharField()
-    index_ = CharField()
-    message_role = CharField()
-    #message_refusal = CharField()
-    prompt_tokens = IntegerField()
-    completion_tokens = IntegerField()
-    total_tokens = IntegerField()
-
-    class Meta:
-        database = db_proxy
-
-class User(Model):
-    uuid = CharField(unique=True, default=lambda: str(uuid4()))  # 新規追加: UUID
+    uuid = CharField(unique=True, default=lambda: str(uuid4()))
     name = CharField(unique=True)
     password = CharField()
     created_at = DateTimeField(default=datetime.datetime.now)
@@ -76,6 +26,39 @@ class User(Model):
             hashed = bcrypt.hashpw(self.password.encode('utf-8'), bcrypt.gensalt())
             self.password = hashed.decode('utf-8')
         return super().save(*args, **kwargs)
+
+    class Meta:
+        database = db_proxy
+
+class DiscussionStructure(Model):
+    user = ForeignKeyField(User, backref='discussionstructure_set')
+    uuid = CharField(unique=True)
+    title = CharField(null=True)
+    system_prompt = CharField(null=True)
+    serialized_structure = BlobField()
+    created_at = DateTimeField(default=datetime.datetime.now)
+    updated_at = DateTimeField(default=datetime.datetime.now)
+
+    class Meta:
+        database = db_proxy
+
+class Message(Model):
+    discussion = ForeignKeyField(DiscussionStructure, backref='message_set')
+    uuid = CharField(unique=True)
+    role = CharField()  # 'user', 'system', 'assistant' など
+    content = CharField()
+    created_at = DateTimeField(default=datetime.datetime.now)
+
+    class Meta:
+        database = db_proxy
+
+class LLMDetails(Model):
+    message = ForeignKeyField(Message, backref='llm_details', unique=True)
+    model = CharField(null=True)
+    provider = CharField(null=True)
+    prompt_tokens = IntegerField(null=True)
+    completion_tokens = IntegerField(null=True)
+    total_tokens = IntegerField(null=True)
 
     class Meta:
         database = db_proxy

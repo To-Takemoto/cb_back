@@ -1,18 +1,21 @@
 from datetime import timedelta
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from src.infra.auth import verify_password, create_access_token, get_current_user
 from src.infra.di import get_user_repository
 from src.infra.logging_config import get_logger
 from src.port.user_repository import UserRepository
+from src.infra.rest_api.rate_limiter import limiter
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 logger = get_logger("api.auth")
 
 
 @router.post("/login")
+@limiter.limit("5/minute")
 async def login(
+    request: Request,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     user_repository: UserRepository = Depends(get_user_repository)
 ):
@@ -42,6 +45,28 @@ async def login(
     )
     
     logger.info("User logged in successfully", extra={"user_id": user.id, "username": user.name})
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
+
+
+@router.post("/refresh")
+@limiter.limit("10/hour")
+async def refresh_token(
+    request: Request,
+    current_user_id: str = Depends(get_current_user)
+):
+    """
+    トークンをリフレッシュする
+    """
+    # Create new access token
+    access_token = create_access_token(
+        data={"sub": current_user_id}
+    )
+    
+    logger.info("Token refreshed", extra={"user_id": current_user_id})
     
     return {
         "access_token": access_token,
