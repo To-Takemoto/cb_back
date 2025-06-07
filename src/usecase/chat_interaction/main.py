@@ -18,7 +18,8 @@
 - 例外処理とエラーハンドリングを統合管理
 """
 
-from typing import Optional, List
+from typing import Optional, List, AsyncGenerator
+import uuid
 from ...domain.entity.message_entity import MessageEntity, Role
 from ...domain.exception.chat_exceptions import ChatNotFoundError, LLMServiceError
 from ...port.chat_repo import ChatRepository
@@ -107,6 +108,82 @@ class ChatInteraction:
             if isinstance(e, (LLMServiceError, ValueError)):
                 raise
             raise LLMServiceError(f"Failed to continue chat: {str(e)}")
+
+    async def continue_chat_stream(self, user_message_strings: str) -> AsyncGenerator[MessageEntity, None]:
+        """
+        チャットを継続し、LLMからのストリーミング応答を取得する
+        
+        ユーザーメッセージを即座に保存し、LLMからの応答を
+        リアルタイムで部分的に配信します。最終的に完全なメッセージとして確定します。
+        
+        Args:
+            user_message_strings (str): ユーザーからのメッセージ内容
+            
+        Yields:
+            MessageEntity: ストリーミング中の部分メッセージと最終確定メッセージ
+            
+        Raises:
+            ValueError: メッセージ内容が空の場合
+            LLMServiceError: LLMサービスとの通信でエラーが発生した場合
+            
+        Usage:
+            async for message_chunk in interaction.continue_chat_stream("質問内容"):
+                if message_chunk.is_streaming:
+                    # ストリーミング中の部分メッセージ
+                    display_partial_message(message_chunk.content)
+                else:
+                    # 最終確定メッセージ
+                    save_final_message(message_chunk)
+        """
+        if not user_message_strings.strip():
+            raise ValueError("Message content cannot be empty")
+            
+        try:
+            # ユーザーメッセージを即座に保存
+            user_message_dto = MessageDTO(Role.USER, user_message_strings)
+            self._process_message(user_message_dto)
+            
+            # チャット履歴取得
+            chat_history = self._get_chat_history()
+            
+            # ストリーミングレスポンスの蓄積
+            accumulated_content = ""
+            temp_id = str(uuid.uuid4())
+            
+            # LLMからのストリーミングレスポンスを処理
+            async for chunk in self.llm_client.complete_message_stream(chat_history):
+                delta_content = chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                if delta_content:
+                    accumulated_content += delta_content
+                    
+                    # 部分的なメッセージエンティティを配信
+                    streaming_message = MessageEntity(
+                        id=0,  # 一時的な値
+                        uuid="",  # 一時的な値
+                        role=Role.ASSISTANT,
+                        content=accumulated_content,
+                        is_streaming=True,
+                        temp_id=temp_id
+                    )
+                    yield streaming_message
+            
+            # 空のレスポンスチェック
+            if not accumulated_content.strip():
+                raise LLMServiceError("Empty response from LLM service")
+            
+            # 最終メッセージをデータベースに保存
+            llm_message_dto = MessageDTO(Role.ASSISTANT, accumulated_content)
+            # LLM詳細情報は現在のチャンクから構築（簡略化）
+            llm_details = {"content": accumulated_content}
+            final_message = self._process_message(llm_message_dto, llm_details)
+            
+            # 最終確定メッセージを配信
+            yield final_message
+            
+        except Exception as e:
+            if isinstance(e, (LLMServiceError, ValueError)):
+                raise
+            raise LLMServiceError(f"Failed to stream chat: {str(e)}")
     
     def restart_chat(self, chat_uuid: str) -> None:
         """

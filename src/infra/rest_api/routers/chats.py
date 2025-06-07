@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from typing import Optional
 import asyncio
+import json
 
 from ..dependencies import get_message_cache_dependency, get_llm_client_dependency
 from ....usecase.model_management.model_service import ModelManagementService
@@ -469,3 +471,117 @@ async def get_chats_with_search_and_pagination(
     except Exception as e:
         logger.error(f"Failed to search and paginate chats", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to search chats")
+
+@router.post("/{chat_uuid}/messages/stream")
+async def send_message_stream(
+    chat_uuid: str,
+    req: MessageRequest,
+    current_user_id: str = Depends(get_current_user),
+    llm_client = Depends(get_llm_client_dependency),
+    cache = Depends(get_message_cache_dependency)
+):
+    """
+    ストリーミング形式でメッセージを送信し、リアルタイムでLLMの応答を取得する
+    
+    Server-Sent Events (SSE)を使用して、LLMの応答生成過程を
+    クライアントにリアルタイムで配信します。
+    
+    Args:
+        chat_uuid: チャットのUUID
+        req: メッセージリクエスト（内容と親メッセージUUID）
+        current_user_id: 現在のユーザーID
+        llm_client: LLMクライアント
+        cache: メッセージキャッシュ
+        
+    Returns:
+        StreamingResponse: SSE形式のストリーミングレスポンス
+        
+    Events:
+        - chunk: 部分的なメッセージ内容
+        - final: 最終的な確定メッセージ
+        - error: エラー情報
+        - [DONE]: ストリーム終了
+    """
+    async def generate_sse():
+        try:
+            # Create user-specific chat repo and interaction
+            chat_repo = create_chat_repo_for_user(current_user_id)
+            interaction = ChatInteraction(chat_repo, llm_client, cache)
+            
+            # チャットの存在確認とロード
+            try:
+                interaction.restart_chat(chat_uuid)
+            except Exception:
+                error_data = {
+                    "type": "error",
+                    "message": "Chat not found"
+                }
+                yield f"data: {json.dumps(error_data)}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+            
+            # 親メッセージが指定されている場合は分岐
+            if req.parent_message_uuid:
+                try:
+                    interaction.select_message(req.parent_message_uuid)
+                except Exception:
+                    error_data = {
+                        "type": "error", 
+                        "message": "Parent message not found"
+                    }
+                    yield f"data: {json.dumps(error_data)}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
+            
+            # ストリーミングチャットを実行
+            final_message = None
+            async for message_chunk in interaction.continue_chat_stream(req.content):
+                if message_chunk.is_streaming:
+                    # ストリーミング中の部分データ
+                    chunk_data = {
+                        "type": "chunk",
+                        "content": message_chunk.content,
+                        "temp_id": message_chunk.temp_id
+                    }
+                    yield f"data: {json.dumps(chunk_data)}\n\n"
+                else:
+                    # 最終確定データ
+                    chunk_data = {
+                        "type": "final",
+                        "content": message_chunk.content,
+                        "message_uuid": str(message_chunk.uuid),
+                        "role": message_chunk.role.value
+                    }
+                    final_message = message_chunk
+                    yield f"data: {json.dumps(chunk_data)}\n\n"
+            
+            logger.info(f"Streaming chat completed for chat {chat_uuid}, user {current_user_id}")
+            
+        except ValueError as e:
+            # 入力検証エラー
+            error_data = {
+                "type": "error", 
+                "message": str(e)
+            }
+            yield f"data: {json.dumps(error_data)}\n\n"
+        except Exception as e:
+            # その他のエラー
+            logger.error(f"Streaming chat failed for chat {chat_uuid}", exc_info=True)
+            error_data = {
+                "type": "error", 
+                "message": "Internal server error occurred during streaming"
+            }
+            yield f"data: {json.dumps(error_data)}\n\n"
+        
+        # ストリーム終了マーカー
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        generate_sse(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # nginx bufferingを無効化
+        }
+    )

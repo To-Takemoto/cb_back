@@ -159,7 +159,7 @@ class ChatRepo:
         """ユーザー情報をキャッシュして取得"""
         if self._user_cache is None:
             try:
-                self._user_cache = User.get(User.uuid == self.user_id)
+                self._user_cache = User.get(User.id == self.user_id)
             except DoesNotExist:
                 raise ValueError(f"User not found: {self.user_id}")
         return self._user_cache

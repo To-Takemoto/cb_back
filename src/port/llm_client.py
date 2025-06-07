@@ -1,4 +1,4 @@
-from typing import Protocol#, AsyncIterable
+from typing import Protocol, AsyncGenerator
 
 class LLMClient(Protocol):
     """LLMサービスとの通信を抽象化するインターフェース"""
@@ -12,6 +12,17 @@ class LLMClient(Protocol):
             
         Returns:
             LLMからの応答メッセージ
+        """
+
+    async def complete_message_stream(self, messages: list[dict]) -> AsyncGenerator[dict, None]:
+        """
+        メッセージリストをLLMに送信し、ストリーミング形式で応答を取得する
+        
+        Args:
+            messages: 送信するメッセージのリスト
+            
+        Yields:
+            LLMからのストリーミング応答チャンク
         """
 
     def set_model(self, model_name: str) -> None:

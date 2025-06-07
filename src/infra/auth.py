@@ -225,6 +225,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> str:
         if user_id is None:
             logger.warning("Token missing 'sub' claim")
             raise credentials_exception
+        
     except JWTError:
         raise credentials_exception
     

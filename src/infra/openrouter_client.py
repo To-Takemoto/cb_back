@@ -1,5 +1,7 @@
 import os
+import json
 import httpx
+from typing import AsyncGenerator
 from dotenv import load_dotenv
 
 from .presentators import format_api_response, format_api_input
@@ -98,6 +100,64 @@ class OpenRouterLLMService:
             raise TimeoutError("LLM API request timed out")
         except httpx.HTTPStatusError as e:
             raise ConnectionError(f"LLM API error: {e.response.status_code}")
+        except Exception as e:
+            raise e
+    
+    async def complete_message_stream(self, messages: list[MessageEntity]) -> AsyncGenerator[dict, None]:
+        """
+        メッセージリストをLLMに送信し、ストリーミング形式で応答を取得する
+        
+        Args:
+            messages: 送信するメッセージのリスト
+            
+        Yields:
+            LLMからのストリーミング応答チャンク
+        """
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=30.0)
+
+        message_dict_list = format_api_input.format_entity_list_to_dict_list(messages)
+        
+        # URLの作成
+        url = f"{self.BASE_URL}{self.CHAT_ENDPOINT}"
+        # リクエストデータの構築（ストリーミング用）
+        data = {
+            "model": self.model,
+            "messages": message_dict_list,
+            "temperature": 0.7,
+            "max_tokens": 1000,
+            "stream": True  # ストリーミングを有効化
+        }
+        
+        try:
+            async with self._client.stream(
+                "POST",
+                url,
+                headers=self.headers,
+                json=data
+            ) as response:
+                response.raise_for_status()
+                
+                async for line in response.aiter_lines():
+                    if line.startswith("data: "):
+                        if line == "data: [DONE]":
+                            break
+                        
+                        try:
+                            chunk_data = json.loads(line[6:])  # "data: " を除去
+                            # チャンクにコンテンツが含まれている場合のみyield
+                            if (chunk_data.get("choices") and 
+                                chunk_data["choices"][0].get("delta") and
+                                chunk_data["choices"][0]["delta"].get("content")):
+                                yield chunk_data
+                        except json.JSONDecodeError:
+                            # 無効なJSONは無視
+                            continue
+                            
+        except httpx.TimeoutException:
+            raise TimeoutError("LLM API streaming request timed out")
+        except httpx.HTTPStatusError as e:
+            raise ConnectionError(f"LLM API streaming error: {e.response.status_code}")
         except Exception as e:
             raise e
     
