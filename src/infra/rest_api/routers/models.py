@@ -88,10 +88,8 @@ async def select_model(
         選択結果のメッセージ
     """
     try:
-        # 利用可能なモデル一覧を取得してバリデーション
-        available_models = await model_service.get_available_models()
-        
-        if not model_service.validate_model_id(req.model_id, available_models):
+        # モデルIDをバリデーション（キャッシュ自動更新付き）
+        if not await model_service.validate_model_id_with_cache_refresh(req.model_id):
             raise HTTPException(
                 status_code=400, 
                 detail=f"Model '{req.model_id}' is not available"

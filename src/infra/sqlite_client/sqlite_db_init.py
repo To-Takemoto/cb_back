@@ -3,11 +3,11 @@ from pathlib import Path
 from peewee import SqliteDatabase
 from dotenv import load_dotenv
 
-from .peewee_models import User, Message, LLMDetails, DiscussionStructure, db_proxy
-from ...infra.config import Settings
+from .peewee_models import User, Message, LLMDetails, DiscussionStructure, AvailableModelCache, db_proxy
+from src.infra.config import Settings
 
-def initialize_database():
-    """データベースの初期化を行う"""
+def create_db_connection():
+    """データベース接続を作成・初期化する"""
     settings = Settings()
     
     # データベースファイルのディレクトリを作成
@@ -18,10 +18,18 @@ def initialize_database():
     db = SqliteDatabase(str(db_path))
     db_proxy.initialize(db)
     
+    return db
+
+def initialize_database():
+    """データベースの初期化を行う"""
+    db = create_db_connection()
+    
     try:
         db.connect()
         # テーブルの作成（存在しない場合のみ）
-        db.create_tables([User, Message, LLMDetails, DiscussionStructure], safe=True)
+        db.create_tables([User, Message, LLMDetails, DiscussionStructure, AvailableModelCache], safe=True)
+        settings = Settings()
+        db_path = Path(settings.database_url.replace("sqlite:///", ""))
         print(f"Database initialized successfully at: {db_path}")
         return True
     except Exception as e:

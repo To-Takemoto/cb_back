@@ -5,7 +5,9 @@ from peewee import (
     IntegerField,
     ForeignKeyField,
     DateTimeField,
-    BlobField
+    BlobField,
+    TextField,
+    BooleanField
     )
 
 from uuid import uuid4
@@ -61,4 +63,23 @@ class LLMDetails(Model):
 
     class Meta:
         database = db_proxy
+
+
+class AvailableModelCache(Model):
+    """利用可能なモデルのキャッシュテーブル"""
+    
+    id = CharField(primary_key=True)  # OpenRouter model ID
+    name = CharField()
+    description = TextField(null=True)
+    context_length = IntegerField(null=True)
+    pricing_prompt = CharField(null=True)  # Store as string to preserve decimal precision
+    pricing_completion = CharField(null=True)
+    architecture_data = TextField(null=True)  # JSON string for architecture details
+    created = IntegerField(null=True)  # Unix timestamp from OpenRouter
+    last_updated = DateTimeField(default=datetime.datetime.now)
+    is_active = BooleanField(default=True)
+    
+    class Meta:
+        database = db_proxy
+        table_name = 'available_models'
 

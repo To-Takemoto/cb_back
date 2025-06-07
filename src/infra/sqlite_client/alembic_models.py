@@ -1,7 +1,7 @@
 """
 SQLAlchemy models for Alembic migrations
 """
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, ForeignKey, Index
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, ForeignKey, Index, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -94,4 +94,25 @@ class UserChatPosition(Base):
     # Indexes
     __table_args__ = (
         Index('idx_position_user_discussion', 'user_id', 'discussion_structure_id', unique=True),
+    )
+
+
+class AvailableModel(Base):
+    __tablename__ = 'available_models'
+    
+    id = Column(String(255), primary_key=True)  # OpenRouter model ID
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    context_length = Column(Integer)
+    pricing_prompt = Column(String(50))  # Store as string to preserve decimal precision
+    pricing_completion = Column(String(50))
+    architecture_data = Column(Text)  # JSON string for architecture details
+    created = Column(Integer)  # Unix timestamp from OpenRouter
+    last_updated = Column(DateTime, default=datetime.utcnow, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    
+    # Indexes
+    __table_args__ = (
+        Index('idx_model_last_updated', 'last_updated'),
+        Index('idx_model_active', 'is_active'),
     )
