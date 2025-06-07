@@ -5,10 +5,18 @@ import re
 class ChatCreateRequest(BaseModel):
     initial_message: Optional[Annotated[str, Field(max_length=4000)]] = None
     model_id: Optional[str] = None
+    system_prompt: Optional[Annotated[str, Field(max_length=2000)]] = None
     
     @field_validator('initial_message')
     @classmethod
     def validate_initial_message(cls, v):
+        if v is not None and not v.strip():
+            return None
+        return v
+    
+    @field_validator('system_prompt')
+    @classmethod
+    def validate_system_prompt(cls, v):
         if v is not None and not v.strip():
             return None
         return v

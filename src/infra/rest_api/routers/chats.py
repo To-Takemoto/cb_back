@@ -62,7 +62,7 @@ async def create_chat(
     interaction = ChatInteraction(chat_repo, llm_client, cache)
     
     # 初期メッセージがNoneの場合は空文字列を渡す
-    interaction.start_new_chat(req.initial_message or "")
+    interaction.start_new_chat(req.initial_message or "", req.system_prompt)
     return ChatCreateResponse(chat_uuid=str(interaction.structure.get_uuid()))
 
 @router.post("/{chat_uuid}/messages", response_model=MessageResponse)

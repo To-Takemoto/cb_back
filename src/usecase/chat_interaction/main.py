@@ -63,7 +63,7 @@ class ChatInteraction:
         self.structure = StructureHandle(self.chat_repo)
         self.cache = cache_handle
 
-    def start_new_chat(self, initial_strings: Optional[str] = None) -> None:
+    def start_new_chat(self, initial_strings: Optional[str] = None, system_prompt: Optional[str] = None) -> None:
         """
         新しいチャットセッションを開始
         
@@ -73,6 +73,8 @@ class ChatInteraction:
         Args:
             initial_strings (Optional[str]): 初期システムメッセージ
                                             Noneの場合は空のシステムメッセージ
+            system_prompt (Optional[str]): システムプロンプト
+                                         LLM呼び出し時に使用される
         
         Side Effects:
             - データベースに新しいチャットと初期メッセージを作成
@@ -80,7 +82,7 @@ class ChatInteraction:
             - メッセージキャッシュに初期メッセージを登録
         """
         initial_message_dto = MessageDTO(Role.SYSTEM, initial_strings)
-        new_tree, initial_message_entity = self.chat_repo.init_structure(initial_message_dto)
+        new_tree, initial_message_entity = self.chat_repo.init_structure(initial_message_dto, system_prompt)
         self.structure.store_tree(new_tree)
         self.cache.set(initial_message_entity)
 

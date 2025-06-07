@@ -60,7 +60,18 @@ class ChatRepo:
             role=self.evaluate_role(inserted.role),
             content=inserted.content
         )
-        # LLM詳細保存ロジックは未実装
+        
+        # LLM詳細情報の保存（アシスタントメッセージのみ）
+        if llm_details and message_dto.role == Role.ASSISTANT:
+            LLMDetails.create(
+                message=inserted,
+                model=llm_details.get('model'),
+                provider=llm_details.get('provider', 'openrouter'),
+                prompt_tokens=llm_details.get('prompt_tokens', 0),
+                completion_tokens=llm_details.get('completion_tokens', 0),
+                total_tokens=llm_details.get('total_tokens', 0)
+            )
+        
         return message_entity
 
     @staticmethod
@@ -73,7 +84,7 @@ class ChatRepo:
             return Role.SYSTEM
         raise ValueError(f"想定外のrole; {role}")
 
-    def init_structure(self, initial_message_dto: MessageDTO) -> Tuple[ChatTree, MessageEntity]:
+    def init_structure(self, initial_message_dto: MessageDTO, system_prompt: Optional[str] = None) -> Tuple[ChatTree, MessageEntity]:
         """
         新規チャット構造を作成し、初期メッセージを保存
         """
@@ -82,7 +93,8 @@ class ChatRepo:
         base = DiscussionStructure.create(
             user=user,
             uuid=uuidGen.uuid4(),
-            serialized_structure=b""
+            serialized_structure=b"",
+            system_prompt=system_prompt
         )
         # 初期メッセージを保存
         saved_msg = self.save_message(base.uuid, initial_message_dto)
@@ -147,10 +159,84 @@ class ChatRepo:
         """ユーザー情報をキャッシュして取得"""
         if self._user_cache is None:
             try:
-                self._user_cache = User.get_by_id(self.user_id)
+                self._user_cache = User.get(User.uuid == self.user_id)
             except DoesNotExist:
                 raise ValueError(f"User not found: {self.user_id}")
         return self._user_cache
+    
+    async def generate_chat_title(self, chat_uuid: str, messages: List, llm_client) -> str:
+        """
+        チャットのメッセージからLLMを使ってタイトルを生成
+        
+        Args:
+            chat_uuid (str): チャットUUID
+            messages (List): メッセージリスト
+            llm_client: LLMクライアント
+            
+        Returns:
+            str: 生成されたタイトル（最大50文字）
+        """
+        # メッセージが空の場合はデフォルトタイトル
+        if not messages:
+            return "New Chat"
+        
+        # 最初の3-5メッセージを取得してタイトル生成に使用
+        context_messages = messages[:5]
+        
+        try:
+            # タイトル生成用のプロンプトを作成
+            prompt_message = {
+                "role": "system",
+                "content": "以下の会話を15文字以内で要約してタイトルを生成してください。タイトルのみを返してください。"
+            }
+            
+            # 会話履歴をLLM用のフォーマットに変換
+            conversation = [prompt_message]
+            for msg in context_messages:
+                conversation.append({
+                    "role": msg.role.value if hasattr(msg.role, 'value') else str(msg.role).lower(),
+                    "content": msg.content
+                })
+            
+            # LLMにタイトル生成を依頼
+            response = await llm_client.complete_message(conversation)
+            title = response.get("content", "").strip()
+            
+            # タイトルが生成された場合は長さを制限
+            if title:
+                return title[:50]
+            else:
+                # フォールバック: 最初のメッセージから生成
+                return self._generate_fallback_title(context_messages)
+                
+        except Exception as e:
+            # LLMエラー時のフォールバック処理
+            return self._generate_fallback_title(context_messages)
+    
+    def _generate_fallback_title(self, messages: List) -> str:
+        """
+        LLMが使用できない場合のフォールバックタイトル生成
+        
+        Args:
+            messages (List): メッセージリスト
+            
+        Returns:
+            str: フォールバックタイトル
+        """
+        if not messages:
+            return "New Chat"
+        
+        # 最初のユーザーメッセージを使用
+        for msg in messages:
+            if hasattr(msg, 'role') and str(msg.role).lower() == 'user':
+                content = msg.content.strip()
+                if content:
+                    return content[:50]
+        
+        # ユーザーメッセージがない場合は最初のメッセージを使用
+        first_message = messages[0]
+        content = first_message.content.strip()
+        return content[:50] if content else "New Chat"
     
     def get_recent_chats(self, user_uuid: str, limit: int = 10) -> List[Dict[str, Any]]:
         """ユーザーの最近のチャット一覧を取得（最適化版）"""
