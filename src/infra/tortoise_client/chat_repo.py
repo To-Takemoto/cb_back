@@ -178,11 +178,40 @@ class TortoiseChatRepository(ChatRepository):
 
     async def get_user_chat_count(self, user_uuid: str) -> int:
         """ユーザーの全チャット数を取得"""
-        return 0
+        try:
+            user = await User.get(uuid=user_uuid)
+            count = await DiscussionStructure.filter(user=user).count()
+            return count
+        except Exception:
+            return 0
 
     async def get_recent_chats_paginated(self, user_uuid: str, limit: int, offset: int) -> list[dict]:
         """ページネーションでチャット一覧を取得"""
-        return []
+        try:
+            user = await User.get(uuid=user_uuid)
+            discussions = await DiscussionStructure.filter(user=user).order_by('-updated_at').offset(offset).limit(limit)
+            
+            result = []
+            for discussion in discussions:
+                # 各チャットのメッセージ数を取得
+                message_count = await Message.filter(discussion=discussion).count()
+                
+                # 最初のメッセージを取得してプレビューとして使用
+                first_message = await Message.filter(discussion=discussion).order_by('created_at').first()
+                preview = first_message.content[:100] if first_message else ""
+                
+                result.append({
+                    "uuid": discussion.uuid,
+                    "title": discussion.title or "Untitled Chat",
+                    "preview": preview,
+                    "message_count": message_count,
+                    "created_at": discussion.created_at.isoformat(),
+                    "updated_at": discussion.updated_at.isoformat()
+                })
+            
+            return result
+        except Exception:
+            return []
 
     async def get_chat_metadata(self, chat_uuid: str, user_uuid: str) -> Optional[dict]:
         """チャットのメタデータを取得"""
@@ -226,15 +255,34 @@ class TortoiseChatRepository(ChatRepository):
         """
         tree = await self.load_tree(chat_uuid)
         
+        # 全ノードのUUIDを抽出
+        all_uuids = []
+        def extract_uuids(node):
+            all_uuids.append(str(node.uuid))
+            for child in node.children:
+                extract_uuids(child)
+        extract_uuids(tree.tree)
+        
+        # 全メッセージを一括取得
+        messages = await Message.filter(uuid__in=all_uuids)
+        message_map = {msg.uuid: msg for msg in messages}
+        
         def convert_node_to_dict(node):
-            # ノードからメッセージUUIDを取得
             node_uuid = str(node.uuid)
+            message = message_map.get(node_uuid)
             
-            # メッセージの詳細情報を取得（同期的にアクセスする必要があるため、デフォルト値を使用）
+            if message:
+                role = message.role
+                content = message.content
+            else:
+                # メッセージが見つからない場合のデフォルト値
+                role = "unknown"
+                content = ""
+            
             return {
                 "uuid": node_uuid,
-                "role": "user",  # デフォルト値、実際の実装では非同期でメッセージを取得する必要がある
-                "content": "",   # デフォルト値、実際の実装では非同期でメッセージを取得する必要がある
+                "role": role,
+                "content": content,
                 "children": [convert_node_to_dict(child) for child in node.children]
             }
         
