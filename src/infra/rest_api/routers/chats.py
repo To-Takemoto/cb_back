@@ -35,8 +35,6 @@ def get_model_service(llm_client = Depends(get_llm_client_dependency)) -> ModelM
 async def create_chat(
     req: ChatCreateRequest,
     current_user_id: str = Depends(get_current_user),
-    llm_client = Depends(get_llm_client_dependency),
-    cache = Depends(get_message_cache_dependency),
     model_service: ModelManagementService = Depends(get_model_service)
 ):
     """
@@ -60,11 +58,14 @@ async def create_chat(
             raise HTTPException(status_code=500, detail="Failed to set model")
     
     # Create user-specific chat repo and interaction
-    chat_repo = create_chat_repo_for_user(current_user_id)
+    from ..dependencies import get_llm_client_dependency, get_message_cache_dependency
+    llm_client = get_llm_client_dependency()
+    cache = get_message_cache_dependency()
+    chat_repo = await create_chat_repo_for_user(current_user_id)
     interaction = ChatInteraction(chat_repo, llm_client, cache)
     
     # 初期メッセージがNoneの場合は空文字列を渡す
-    interaction.start_new_chat(req.initial_message or "", req.system_prompt)
+    await interaction.start_new_chat(req.initial_message or "", req.system_prompt)
     return ChatCreateResponse(chat_uuid=str(interaction.structure.get_uuid()))
 
 @router.post("/{chat_uuid}/messages", response_model=MessageResponse)
@@ -72,8 +73,6 @@ async def send_message(
     chat_uuid: str,
     req: MessageRequest,
     current_user_id: str = Depends(get_current_user),
-    llm_client = Depends(get_llm_client_dependency),
-    cache = Depends(get_message_cache_dependency),
     model_service: ModelManagementService = Depends(get_model_service)
 ):
     """
@@ -98,18 +97,20 @@ async def send_message(
             raise HTTPException(status_code=500, detail="Failed to set model")
     
     # Create user-specific chat repo and interaction
-    chat_repo = create_chat_repo_for_user(current_user_id)
+    llm_client = get_llm_client_dependency()
+    cache = get_message_cache_dependency()
+    chat_repo = await create_chat_repo_for_user(current_user_id)
     interaction = ChatInteraction(chat_repo, llm_client, cache)
     
     try:
-        interaction.restart_chat(chat_uuid)
+        await interaction.restart_chat(chat_uuid)
     except Exception:
         raise HTTPException(status_code=404, detail="Chat not found")
 
     # 新機能: 親メッセージが指定されていれば選択
     if req.parent_message_uuid:
         try:
-            interaction.select_message(req.parent_message_uuid)
+            await interaction.select_message(req.parent_message_uuid)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid parent message UUID")
 
@@ -143,11 +144,11 @@ async def get_history(
     指定チャットの全メッセージ履歴を返却
     """
     # Create user-specific chat repo and interaction
-    chat_repo = create_chat_repo_for_user(current_user_id)
+    chat_repo = await create_chat_repo_for_user(current_user_id)
     interaction = ChatInteraction(chat_repo, llm_client, cache)
     
     try:
-        interaction.restart_chat(chat_uuid)
+        await interaction.restart_chat(chat_uuid)
     except Exception:
         raise HTTPException(status_code=404, detail="Chat not found")
 
@@ -158,7 +159,7 @@ async def get_history(
         msg = interaction.cache.get(uuid)
         if msg is None:
             try:
-                fetched = interaction.chat_repo.get_history([uuid])[0]
+                fetched = (await interaction.chat_repo.get_history([uuid]))[0]
             except Exception:
                 raise HTTPException(status_code=404, detail=f"Message {uuid} not found")
             interaction.cache.set(fetched)
@@ -190,14 +191,14 @@ async def retry_message(
     失敗したメッセージを再試行する
     """
     # Create user-specific chat repo and interaction
-    chat_repo = create_chat_repo_for_user(current_user_id)
+    chat_repo = await create_chat_repo_for_user(current_user_id)
     interaction = ChatInteraction(chat_repo, llm_client, cache)
     
     try:
-        interaction.restart_chat(chat_uuid)
+        await interaction.restart_chat(chat_uuid)
         
         # メッセージIDからノードを選択してリトライ
-        interaction.select_message(message_id)
+        await interaction.select_message(message_id)
         msg = await interaction.retry_last_message()
         
         return MessageResponse(
@@ -218,14 +219,14 @@ async def get_recent_chats(
     """
     最近のチャット一覧を取得する（ページネーション対応）
     """
-    chat_repo = create_chat_repo_for_user(current_user_id)
+    chat_repo = await create_chat_repo_for_user(current_user_id)
     offset = (pagination.page - 1) * pagination.limit
     
     # 全チャット数を取得
-    total_chats = chat_repo.get_user_chat_count(current_user_id)
+    total_chats = await chat_repo.get_user_chat_count(current_user_id)
     
     # ページネーションされたチャットを取得
-    chats = chat_repo.get_recent_chats_paginated(current_user_id, pagination.limit, offset)
+    chats = await chat_repo.get_recent_chats_paginated(current_user_id, pagination.limit, offset)
     
     # 総ページ数を計算
     total_pages = (total_chats + pagination.limit - 1) // pagination.limit
@@ -246,8 +247,8 @@ async def delete_chat(
     """
     チャットを削除する
     """
-    chat_repo = create_chat_repo_for_user(current_user_id)
-    success = chat_repo.delete_chat(chat_uuid, current_user_id)
+    chat_repo = await create_chat_repo_for_user(current_user_id)
+    success = await chat_repo.delete_chat(chat_uuid, current_user_id)
     if not success:
         raise HTTPException(status_code=404, detail="Chat not found or access denied")
     
@@ -267,8 +268,8 @@ async def search_messages(
     if not q or len(q.strip()) < 2:
         raise HTTPException(status_code=400, detail="Query must be at least 2 characters")
     
-    chat_repo = create_chat_repo_for_user(current_user_id)
-    results = chat_repo.search_messages(chat_uuid, q.strip())
+    chat_repo = await create_chat_repo_for_user(current_user_id)
+    results = await chat_repo.search_messages(chat_uuid, q.strip())
     return {"results": results, "query": q}
 
 @router.get("/{chat_uuid}", response_model=ChatMetadataResponse)
@@ -280,8 +281,8 @@ async def get_chat_metadata(
     チャットのメタデータを取得する
     """
     try:
-        chat_repo = create_chat_repo_for_user(current_user_id)
-        metadata = chat_repo.get_chat_metadata(chat_uuid, current_user_id)
+        chat_repo = await create_chat_repo_for_user(current_user_id)
+        metadata = await chat_repo.get_chat_metadata(chat_uuid, current_user_id)
         if not metadata:
             raise HTTPException(status_code=404, detail="Chat not found")
         return ChatMetadataResponse(**metadata)
@@ -299,8 +300,8 @@ async def update_chat(
     チャットのタイトルやシステムプロンプトを更新する
     """
     try:
-        chat_repo = create_chat_repo_for_user(current_user_id)
-        success = chat_repo.update_chat(chat_uuid, current_user_id, req.title, req.system_prompt)
+        chat_repo = await create_chat_repo_for_user(current_user_id)
+        success = await chat_repo.update_chat(chat_uuid, current_user_id, req.title, req.system_prompt)
         if not success:
             raise HTTPException(status_code=404, detail="Chat not found or access denied")
         
@@ -321,8 +322,8 @@ async def edit_message(
     既存メッセージの内容を修正する
     """
     try:
-        chat_repo = create_chat_repo_for_user(current_user_id)
-        success = chat_repo.edit_message(chat_uuid, message_id, current_user_id, req.content)
+        chat_repo = await create_chat_repo_for_user(current_user_id)
+        success = await chat_repo.edit_message(chat_uuid, message_id, current_user_id, req.content)
         if not success:
             raise HTTPException(status_code=404, detail="Message not found or access denied")
         
@@ -342,8 +343,8 @@ async def delete_message(
     指定されたメッセージをチャット履歴から削除する
     """
     try:
-        chat_repo = create_chat_repo_for_user(current_user_id)
-        success = chat_repo.delete_message(chat_uuid, message_id, current_user_id)
+        chat_repo = await create_chat_repo_for_user(current_user_id)
+        success = await chat_repo.delete_message(chat_uuid, message_id, current_user_id)
         if not success:
             raise HTTPException(status_code=404, detail="Message not found or access denied")
         
@@ -364,15 +365,15 @@ async def get_complete_chat_data(
     """
     try:
         # Create user-specific chat repo
-        chat_repo = create_chat_repo_for_user(current_user_id)
+        chat_repo = await create_chat_repo_for_user(current_user_id)
         
         # メタデータを取得してチャットの存在確認
-        metadata = chat_repo.get_chat_metadata(chat_uuid, current_user_id)
+        metadata = await chat_repo.get_chat_metadata(chat_uuid, current_user_id)
         if not metadata:
             raise HTTPException(status_code=404, detail="Chat not found")
         
         # ツリー構造全体を取得
-        tree_data = chat_repo.get_tree_structure(chat_uuid)
+        tree_data = await chat_repo.get_tree_structure(chat_uuid)
         
         # ツリーから全メッセージUUIDを抽出
         all_uuids = []
@@ -383,7 +384,7 @@ async def get_complete_chat_data(
         extract_uuids(tree_data)
         
         # 全メッセージを取得
-        messages_entities = chat_repo.get_history(all_uuids)
+        messages_entities = await chat_repo.get_history(all_uuids)
         
         # レスポンス構築
         messages = [
@@ -420,14 +421,14 @@ async def get_tree_structure(
     """
     try:
         # Create user-specific chat repo and interaction
-        chat_repo = create_chat_repo_for_user(current_user_id)
+        chat_repo = await create_chat_repo_for_user(current_user_id)
         interaction = ChatInteraction(chat_repo, llm_client, cache)
         
         # チャットの存在確認とロード
-        interaction.restart_chat(chat_uuid)
+        await interaction.restart_chat(chat_uuid)
         
         # ツリー構造を取得
-        tree_data = chat_repo.get_tree_structure(chat_uuid)
+        tree_data = await chat_repo.get_tree_structure(chat_uuid)
         
         return TreeStructureResponse(
             chat_uuid=chat_uuid,
@@ -446,11 +447,11 @@ async def get_chats_with_search_and_pagination(
     チャットの一覧をページネーション・ソート・キーワード検索付きで取得する
     """
     try:
-        chat_repo = create_chat_repo_for_user(current_user_id)
+        chat_repo = await create_chat_repo_for_user(current_user_id)
         offset = (pagination.page - 1) * pagination.limit
         
         # 検索・ソート・ページネーション実行
-        result = chat_repo.search_and_paginate_chats(
+        result = await chat_repo.search_and_paginate_chats(
             current_user_id, 
             pagination.q, 
             pagination.sort, 
@@ -505,12 +506,12 @@ async def send_message_stream(
     async def generate_sse():
         try:
             # Create user-specific chat repo and interaction
-            chat_repo = create_chat_repo_for_user(current_user_id)
+            chat_repo = await create_chat_repo_for_user(current_user_id)
             interaction = ChatInteraction(chat_repo, llm_client, cache)
             
             # チャットの存在確認とロード
             try:
-                interaction.restart_chat(chat_uuid)
+                await interaction.restart_chat(chat_uuid)
             except Exception:
                 error_data = {
                     "type": "error",
@@ -523,7 +524,7 @@ async def send_message_stream(
             # 親メッセージが指定されている場合は分岐
             if req.parent_message_uuid:
                 try:
-                    interaction.select_message(req.parent_message_uuid)
+                    await interaction.select_message(req.parent_message_uuid)
                 except Exception:
                     error_data = {
                         "type": "error", 

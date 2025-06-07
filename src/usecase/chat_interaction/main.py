@@ -64,7 +64,7 @@ class ChatInteraction:
         self.structure = StructureHandle(self.chat_repo)
         self.cache = cache_handle
 
-    def start_new_chat(self, initial_strings: Optional[str] = None, system_prompt: Optional[str] = None) -> None:
+    async def start_new_chat(self, initial_strings: Optional[str] = None, system_prompt: Optional[str] = None) -> None:
         """
         新しいチャットセッションを開始
         
@@ -82,9 +82,15 @@ class ChatInteraction:
             - 内部状態を新しいチャットに設定
             - メッセージキャッシュに初期メッセージを登録
         """
-        initial_message_dto = MessageDTO(Role.SYSTEM, initial_strings)
-        new_tree, initial_message_entity = self.chat_repo.init_structure(initial_message_dto, system_prompt)
-        self.structure.store_tree(new_tree)
+        # MessageEntityを作成してinit_structureに渡す
+        initial_message = MessageEntity(
+            id=0,
+            uuid=str(uuid.uuid4()),
+            role=Role.SYSTEM,
+            content=initial_strings or ""
+        )
+        new_tree, initial_message_entity = await self.chat_repo.init_structure(initial_message)
+        await self.structure.store_tree(new_tree)
         self.cache.set(initial_message_entity)
 
     async def continue_chat(self, user_message_strings: str) -> MessageEntity:
@@ -94,15 +100,15 @@ class ChatInteraction:
             
         try:
             user_message_dto = MessageDTO(Role.USER, user_message_strings)
-            self._process_message(user_message_dto)
-            chat_history = self._get_chat_history()
+            await self._process_message(user_message_dto)
+            chat_history = await self._get_chat_history()
             
             llm_response = await self.llm_client.complete_message(chat_history)
             if not llm_response.get("content"):
                 raise LLMServiceError("Empty response from LLM service")
                 
             llm_message_dto = MessageDTO(Role.ASSISTANT, llm_response["content"])
-            llm_message = self._process_message(llm_message_dto, llm_response)
+            llm_message = await self._process_message(llm_message_dto, llm_response)
             return llm_message
         except Exception as e:
             if isinstance(e, (LLMServiceError, ValueError)):
@@ -141,10 +147,10 @@ class ChatInteraction:
         try:
             # ユーザーメッセージを即座に保存
             user_message_dto = MessageDTO(Role.USER, user_message_strings)
-            self._process_message(user_message_dto)
+            await self._process_message(user_message_dto)
             
             # チャット履歴取得
-            chat_history = self._get_chat_history()
+            chat_history = await self._get_chat_history()
             
             # ストリーミングレスポンスの蓄積
             accumulated_content = ""
@@ -175,7 +181,7 @@ class ChatInteraction:
             llm_message_dto = MessageDTO(Role.ASSISTANT, accumulated_content)
             # LLM詳細情報は現在のチャンクから構築（簡略化）
             llm_details = {"content": accumulated_content}
-            final_message = self._process_message(llm_message_dto, llm_details)
+            final_message = await self._process_message(llm_message_dto, llm_details)
             
             # 最終確定メッセージを配信
             yield final_message
@@ -185,7 +191,7 @@ class ChatInteraction:
                 raise
             raise LLMServiceError(f"Failed to stream chat: {str(e)}")
     
-    def restart_chat(self, chat_uuid: str) -> None:
+    async def restart_chat(self, chat_uuid: str) -> None:
         """
         既存のチャットセッションを再開
         
@@ -202,8 +208,8 @@ class ChatInteraction:
             - 内部状態を指定されたチャットに切り替え
             - ツリー構造をロードし、最新メッセージに移動
         """
-        chat_tree = self.chat_repo.load_tree(chat_uuid)
-        self.structure.store_tree(chat_tree)
+        chat_tree = await self.chat_repo.load_tree(chat_uuid)
+        await self.structure.store_tree(chat_tree)
 
     def select_message(self, message_uuid: str) -> None:
         """
@@ -226,7 +232,7 @@ class ChatInteraction:
         """
         self.structure.select_node(message_uuid)
         
-    def _get_chat_history(self) -> List[MessageEntity]:
+    async def _get_chat_history(self) -> List[MessageEntity]:
         """
         現在の会話パスのメッセージ履歴を取得
         
@@ -238,10 +244,10 @@ class ChatInteraction:
                                時間的順序でソートされている
         """
         chat_history_uuid_list = self.structure.get_current_path()
-        chat_history = self.chat_repo.get_history(chat_history_uuid_list)
+        chat_history = await self.chat_repo.get_history(chat_history_uuid_list)
         return chat_history
         
-    def _process_message(self, message_dto: MessageDTO, llm_details: Optional[dict] = None) -> MessageEntity:
+    async def _process_message(self, message_dto: MessageDTO, llm_details: Optional[dict] = None) -> MessageEntity:
         """
         メッセージを処理してデータベースに保存
         
@@ -262,7 +268,7 @@ class ChatInteraction:
             - ツリー構造にメッセージを追加
             - データベースのツリー構造を更新
         """
-        message_entity = self.chat_repo.save_message(
+        message_entity = await self.chat_repo.save_message(
             discussion_structure_uuid = self.structure.get_uuid(),
             message_dto = message_dto,
             llm_details = llm_details
@@ -270,5 +276,5 @@ class ChatInteraction:
         self.cache.set(message_entity)
         self.structure.append_message(message_entity)
         new_tree = self.structure.get_chat_tree()
-        self.chat_repo.update_tree(new_tree)
+        await self.chat_repo.update_tree(new_tree)
         return message_entity

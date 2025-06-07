@@ -116,8 +116,8 @@ def test_configuration_loading():
 
 def test_database_models():
     """データベースモデルが正しく定義されていることを確認"""
-    from src.infra.sqlite_client.peewee_models import (
-        User, DiscussionStructure, Message, LLMDetails, UserChatPosition
+    from src.infra.tortoise_client.models import (
+        User, DiscussionStructure, Message, LLMDetails, AvailableModelCache
     )
     
     # Test models exist
@@ -125,13 +125,15 @@ def test_database_models():
     assert DiscussionStructure is not None
     assert Message is not None
     assert LLMDetails is not None
-    assert UserChatPosition is not None
+    assert AvailableModelCache is not None
     
-    # Test UserChatPosition has required fields
-    assert hasattr(UserChatPosition, 'user')
-    assert hasattr(UserChatPosition, 'discussion')
-    assert hasattr(UserChatPosition, 'last_node_id')
-    assert hasattr(UserChatPosition, 'updated_at')
+    # Test models have required fields
+    assert hasattr(User, 'uuid')
+    assert hasattr(User, 'name')
+    assert hasattr(DiscussionStructure, 'user')
+    assert hasattr(DiscussionStructure, 'uuid')
+    assert hasattr(Message, 'discussion')
+    assert hasattr(Message, 'role')
 
 
 if __name__ == "__main__":

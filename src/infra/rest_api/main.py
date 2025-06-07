@@ -61,23 +61,19 @@ async def startup_event():
     """アプリケーション起動時の初期化処理"""
     logger.info("Application starting up", extra={"environment": settings.environment})
     
-    # データベース接続の初期化
-    from src.infra.sqlite_client.peewee_models import db_proxy
-    from peewee import SqliteDatabase
-    import os
+    # Tortoise ORM初期化
+    from tortoise import Tortoise
+    from src.infra.tortoise_client.config import TORTOISE_ORM
     
-    db_path = settings.database_url.replace("sqlite:///", "")
-    
-    # データベースディレクトリが存在しない場合は作成
-    db_dir = os.path.dirname(db_path)
-    if db_dir and not os.path.exists(db_dir):
-        os.makedirs(db_dir, exist_ok=True)
-        logger.info("Created database directory", extra={"db_dir": db_dir})
-    
-    db = SqliteDatabase(db_path)
-    db_proxy.initialize(db)
-    
-    logger.info("Database connection initialized", extra={"db_path": db_path})
+    await Tortoise.init(config=TORTOISE_ORM)
+    logger.info("Tortoise ORM initialized")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """アプリケーション終了時のクリーンアップ"""
+    from tortoise import Tortoise
+    await Tortoise.close_connections()
+    logger.info("Application shutdown complete")
 
 @app.get("/api/v1/health")
 async def health_check():

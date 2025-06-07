@@ -5,49 +5,43 @@ import pytest
 from fastapi.testclient import TestClient
 import tempfile
 import os
-from src.infra.sqlite_client.peewee_models import db_proxy, User, DiscussionStructure, Message
-from peewee import SqliteDatabase
+from tortoise import Tortoise
+from src.infra.tortoise_client.models import User, DiscussionStructure, Message
 from src.infra.auth import create_access_token
 
 
 @pytest.fixture(scope="function")
-def test_db():
+async def test_db():
     """テスト用データベースを作成"""
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.db') as f:
-        test_db_path = f.name
+    from src.infra.tortoise_client.config import TORTOISE_ORM
     
-    # テスト用データベースを初期化
-    db = SqliteDatabase(test_db_path)
-    db_proxy.initialize(db)
+    # テスト用のインメモリデータベース設定
+    test_config = {
+        "connections": {"default": "sqlite://:memory:"},
+        "apps": TORTOISE_ORM["apps"]
+    }
     
-    # テーブルを作成
-    with db:
-        db.create_tables([User, DiscussionStructure, Message])
-        
-        # テストユーザーを作成（パスワードは"password"）
-        user = User.create(
-            uuid="test-user-uuid",
-            name="testuser",
-            password="password"  # User.save()が自動的にハッシュ化する
-        )
+    await Tortoise.init(config=test_config)
+    await Tortoise.generate_schemas()
     
-    yield db
+    # テストユーザーを作成（パスワードは"password"）
+    from src.infra.auth import get_password_hash
+    user = await User.create(
+        uuid="test-user-uuid",
+        name="testuser",
+        password=get_password_hash("password")
+    )
+    
+    yield
     
     # クリーンアップ
-    db.close()
-    os.unlink(test_db_path)
+    await Tortoise.close_connections()
 
 
 @pytest.fixture
 def client(test_db):
     """テストクライアントを作成"""
     from src.infra.rest_api.main import app
-    
-    # スタートアップイベントを無効化してテスト用データベースを使用
-    app.router.on_startup.clear()
-    
-    # テスト用にデータベースプロキシをオーバーライド
-    db_proxy.initialize(test_db)
     
     with TestClient(app) as client:
         yield client
@@ -59,9 +53,10 @@ def auth_token():
     return create_access_token(data={"sub": "test-user-uuid"})
 
 
-def test_user_created(test_db):
+@pytest.mark.asyncio
+async def test_user_created(test_db):
     """テストユーザーが正しく作成されているかテスト"""
-    users = User.select()
+    users = await User.all()
     assert len(users) == 1
     user = users[0]
     assert user.name == "testuser"
@@ -91,11 +86,12 @@ def test_create_chat_authorized(client, auth_token):
     assert "chat_uuid" in data
     
 
-def test_user_repository_integration(client):
+@pytest.mark.asyncio
+async def test_user_repository_integration(client):
     """ユーザーリポジトリとの統合テスト"""
     from src.infra.di import get_user_repository
     user_repo = get_user_repository()
-    user = user_repo.get_user_by_name("testuser")
+    user = await user_repo.get_user_by_name("testuser")
     assert user is not None
     assert user.name == "testuser"
     assert user.uuid == "test-user-uuid"

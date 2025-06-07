@@ -3,7 +3,7 @@ from typing import Dict, Any
 
 from ..dependencies import get_current_user
 from ..schemas import AnalyticsResponse, AnalyticsParams
-from ...sqlite_client.analytics_repository import AnalyticsRepository
+from ...tortoise_client.analytics_repository import TortoiseAnalyticsRepository as AnalyticsRepository
 
 router = APIRouter()
 analytics_repo = AnalyticsRepository()

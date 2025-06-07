@@ -4,7 +4,7 @@ import asyncio
 
 from src.infra.openrouter_client import OpenRouterLLMService
 from src.usecase.chat_interaction.main import ChatInteraction
-from src.infra.sqlite_client.chat_repo import ChatRepo
+from src.infra.tortoise_client.chat_repo import TortoiseChatRepository
 
 
 class TuiChat:
@@ -23,8 +23,8 @@ class TuiChat:
         self.user_id = user_id
         self.model_name = model_name
         self.openrouter_client = OpenRouterLLMService(None, self.model_name)
-        self.sqlite_client = SqliteClient(user_id=self.user_id)
-        self.interaction_manager = ChatInteraction(self.sqlite_client, self.openrouter_client)
+        self.chat_repo = TortoiseChatRepository(user_id=self.user_id)
+        self.interaction_manager = ChatInteraction(self.chat_repo, self.openrouter_client)
         self.status = True
 
     async def start_chat(self, initial_message: str = None) -> None:

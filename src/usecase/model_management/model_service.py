@@ -3,7 +3,7 @@ import logging
 
 from src.domain.entity.model_entity import ModelEntity
 from src.infra.openrouter_client import OpenRouterLLMService
-from src.infra.sqlite_client.model_cache_repo import ModelCacheRepository
+from src.infra.tortoise_client.model_cache_repo import TortoiseModelCacheRepository as ModelCacheRepository
 
 
 class ModelManagementService:

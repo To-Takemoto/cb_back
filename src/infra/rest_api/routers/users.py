@@ -25,7 +25,7 @@ class UserRegisterResponse(BaseModel):
     created_at: datetime
 
 @router.post("", response_model=UserRegisterResponse)
-def register_user(
+async def register_user(
     req: UserRegisterRequest,
     usecase: RegisterUserUseCase = Depends(get_register_user_usecase)
 ):
@@ -34,7 +34,7 @@ def register_user(
     """
     dto = CreateUserDTO(username=req.username, raw_password=req.password)
     try:
-        user = usecase.execute(dto)
+        user = await usecase.execute(dto)
         return UserRegisterResponse(
             uuid=str(user.uuid),
             username=user.username,

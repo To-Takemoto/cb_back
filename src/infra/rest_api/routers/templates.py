@@ -9,8 +9,8 @@ from ..schemas import (
     PresetCreateRequest, PresetUpdateRequest, PresetResponse,
     PresetListParams
 )
-from ...sqlite_client.template_repository import TemplateRepository, PresetRepository
-from ...sqlite_client.peewee_models import PromptTemplate, ConversationPreset
+from ...tortoise_client.template_repository import TortoiseTemplateRepository as TemplateRepository, TortoisePresetRepository as PresetRepository
+from ...tortoise_client.models import PromptTemplate, ConversationPreset
 
 router = APIRouter()
 template_repo = TemplateRepository()

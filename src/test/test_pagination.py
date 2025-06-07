@@ -7,52 +7,54 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from fastapi.testclient import TestClient
 from src.infra.rest_api.main import app
-from src.infra.sqlite_client.peewee_models import (
+from src.infra.tortoise_client.models import (
     User as UserModel,
     DiscussionStructure,
-    Message as MessageModel,
-    database
+    Message as MessageModel
 )
+from tortoise import Tortoise
 import uuid
 from datetime import datetime
 
 client = TestClient(app)
 
 @pytest.fixture
-def setup_test_data():
+async def setup_test_data():
     """テスト用のユーザーとチャットデータを作成"""
-    with database:
-        # テストユーザーを作成
-        test_user = UserModel.create(
+    # テスト用インメモリデータベースを初期化
+    await Tortoise.init(
+        db_url="sqlite://:memory:",
+        modules={"models": ["src.infra.tortoise_client.models"]}
+    )
+    await Tortoise.generate_schemas()
+    
+    # テストユーザーを作成
+    test_user = await UserModel.create(
+        uuid=str(uuid.uuid4()),
+        name=f"test_user_{uuid.uuid4().hex[:8]}",
+        password="hashed_password"
+    )
+    
+    # 複数のチャットを作成
+    for i in range(25):  # 25個のチャットを作成
+        disc = await DiscussionStructure.create(
             uuid=str(uuid.uuid4()),
-            name=f"test_user_{uuid.uuid4().hex[:8]}",
-            password="hashed_password"
+            user=test_user,
+            serialized_structure="{}"
         )
         
-        # 複数のチャットを作成
-        for i in range(25):  # 25個のチャットを作成
-            disc = DiscussionStructure.create(
-                uuid=str(uuid.uuid4()),
-                user=test_user,
-                serialized_structure="{}"
-            )
-            
-            # 各チャットにメッセージを追加
-            MessageModel.create(
-                uuid=str(uuid.uuid4()),
-                discussion=disc,
-                content=f"Test message {i}",
-                role="user"
-            )
-        
-        yield test_user
-        
-        # クリーンアップ
-        MessageModel.delete().where(MessageModel.discussion.in_(
-            DiscussionStructure.select().where(DiscussionStructure.user == test_user)
-        )).execute()
-        DiscussionStructure.delete().where(DiscussionStructure.user == test_user).execute()
-        test_user.delete_instance()
+        # 各チャットにメッセージを追加
+        await MessageModel.create(
+            uuid=str(uuid.uuid4()),
+            discussion=disc,
+            content=f"Test message {i}",
+            role="user"
+        )
+    
+    yield test_user
+    
+    # クリーンアップ
+    await Tortoise.close_connections()
 
 def test_pagination_parameters():
     """ページネーションパラメータの検証"""
@@ -67,7 +69,8 @@ def test_pagination_parameters():
     response = client.get("/api/v1/chats/recent?limit=101")
     assert response.status_code == 422
 
-def test_pagination_response_format(setup_test_data):
+@pytest.mark.asyncio
+async def test_pagination_response_format(setup_test_data):
     """ページネーションレスポンスのフォーマット確認"""
     # このテストでは認証をモックする必要があるため、スキップ
     pass

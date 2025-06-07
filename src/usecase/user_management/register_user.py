@@ -16,8 +16,8 @@ class RegisterUserUseCase:
     def __init__(self, user_repository: UserRepository):
         self.user_repository = user_repository
 
-    def execute(self, user_dto: CreateUserDTO) -> UserEntity:
-        if self.user_repository.exists_by_username(user_dto.username):
+    async def execute(self, user_dto: CreateUserDTO) -> UserEntity:
+        if await self.user_repository.exists_by_username(user_dto.username):
             raise UsernameAlreadyExistsException(
                 f"Username '{user_dto.username}' is already taken"
             )
@@ -33,4 +33,4 @@ class RegisterUserUseCase:
             created_at=datetime.utcnow(),
         )
 
-        return self.user_repository.save(user_dto)
+        return await self.user_repository.save(user_dto)

@@ -10,11 +10,11 @@ class StructureHandle:
         self.chat_tree: Optional[ChatTree] = None
         self.current_node: Optional[ChatStructure] = None
 
-    def store_tree(self, tree: ChatTree) -> None:
+    async def store_tree(self, tree: ChatTree) -> None:
         if tree is None:
             raise InvalidTreeStructureError("Cannot store None tree")
         self.chat_tree = tree
-        self._set_latest()
+        await self._set_latest()
 
     def append_message(self, message: MessageEntity) -> None:
         if self.current_node is None:
@@ -56,8 +56,8 @@ class StructureHandle:
         recurse(self.chat_tree.tree)
         return all_uuids
         
-    def _set_latest(self) -> None:
-        latest_message = self.chat_repo.get_latest_message_by_discussion(self.chat_tree.uuid)
+    async def _set_latest(self) -> None:
+        latest_message = await self.chat_repo.get_latest_message_by_discussion(self.chat_tree.uuid)
         latest_node = self._pick_nodes_with_descendants(
             self.chat_tree.tree,
             lambda node: str(getattr(node, "uuid", None)) == str(latest_message.uuid))

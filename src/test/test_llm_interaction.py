@@ -6,13 +6,13 @@ import asyncio
 
 from src.infra.openrouter_client import OpenRouterLLMService
 from src.usecase.chat_interaction.main import ChatInteraction
-from src.infra.sqlite_client.chat_repo import ChatRepo
+from src.infra.tortoise_client.chat_repo import TortoiseChatRepository
 
 
 async def starter():
     opnerouter_client = OpenRouterLLMService(None, "google/gemini-2.0-flash-001")
-    sqlite_client = SqliteClient(user_id=1)
-    interaction_manageer = ChatInteraction(sqlite_client, opnerouter_client)
+    chat_repo = TortoiseChatRepository(user_id=1)
+    interaction_manageer = ChatInteraction(chat_repo, opnerouter_client)
     interaction_manageer.start_new_chat("あなたは優秀なアシスタントです。userは日本語で回答を期待しています。")
     message = await interaction_manageer.continue_chat("こんにちは")
     print(message.content)
@@ -21,8 +21,8 @@ async def starter():
     
 async def restart():
     opnerouter_client = OpenRouterLLMService(None, "google/gemini-2.0-flash-001")
-    sqlite_client = SqliteClient(user_id=1)
-    interaction_manageer = ChatInteraction(sqlite_client, opnerouter_client)
+    chat_repo = TortoiseChatRepository(user_id=1)
+    interaction_manageer = ChatInteraction(chat_repo, opnerouter_client)
     interaction_manageer.restart_chat(chat_uuid="ca40f9cf-aca4-4a83-ac06-90b7258c700a")
     message = await interaction_manageer.continue_chat("1個目について詳しく教えてくれませんか")
     print(message.content)
@@ -31,8 +31,8 @@ async def restart():
 
 async def select_message():
     opnerouter_client = OpenRouterLLMService(None, "google/gemini-2.0-flash-001")
-    sqlite_client = SqliteClient(user_id=1)
-    interaction_manageer = ChatInteraction(sqlite_client, opnerouter_client)
+    chat_repo = TortoiseChatRepository(user_id=1)
+    interaction_manageer = ChatInteraction(chat_repo, opnerouter_client)
     interaction_manageer.restart_chat(chat_uuid="ca40f9cf-aca4-4a83-ac06-90b7258c700a")
     interaction_manageer.select_message(message_uuid="4198b4df-0a26-4d8c-9510-81e5876f7b7d")
     message = await interaction_manageer.continue_chat("２つ目について詳しく教えてくれませんか")

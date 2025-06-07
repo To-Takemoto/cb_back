@@ -55,7 +55,8 @@ class TestSystemPrompt:
         test_db.drop_tables([LLMDetails, mm, DiscussionStructure, User])
         test_db.close()
     
-    def test_create_chat_with_system_prompt(self):
+    @pytest.mark.asyncio
+    async def test_create_chat_with_system_prompt(self):
         """system_promptを指定してチャットを作成できることを確認"""
         # Arrange
         system_prompt = "You are a helpful AI assistant specialized in Python programming."
@@ -95,7 +96,8 @@ class TestSystemPrompt:
         chat = DiscussionStructure.get(DiscussionStructure.uuid == data["chat_id"])
         assert chat.system_prompt == system_prompt
     
-    def test_create_chat_without_system_prompt(self):
+    @pytest.mark.asyncio
+    async def test_create_chat_without_system_prompt(self):
         """system_promptなしでもチャットを作成できることを確認"""
         # Arrange
         request_data = {
@@ -129,7 +131,8 @@ class TestSystemPrompt:
         chat = DiscussionStructure.get(DiscussionStructure.uuid == data["chat_id"])
         assert chat.system_prompt is None
     
-    def test_system_prompt_used_in_llm_call(self):
+    @pytest.mark.asyncio
+    async def test_system_prompt_used_in_llm_call(self):
         """LLM呼び出し時にsystem_promptが使用されることを確認"""
         # Arrange
         system_prompt = "You are a math tutor. Always explain step by step."
@@ -179,7 +182,8 @@ class TestSystemPrompt:
         assert call_args[0]["role"] == "system"
         assert call_args[0]["content"] == system_prompt
     
-    def test_update_chat_system_prompt(self):
+    @pytest.mark.asyncio
+    async def test_update_chat_system_prompt(self):
         """既存のチャットのsystem_promptを更新できることを確認"""
         # Arrange - チャットを作成
         with patch('src.infra.openrouter_client.OpenRouterLLMService.complete_message') as mock_complete:
@@ -215,7 +219,8 @@ class TestSystemPrompt:
         chat = DiscussionStructure.get(DiscussionStructure.uuid == chat_id)
         assert chat.system_prompt == new_system_prompt
     
-    def test_get_chat_includes_system_prompt(self):
+    @pytest.mark.asyncio
+    async def test_get_chat_includes_system_prompt(self):
         """チャット取得時にsystem_promptが含まれることを確認"""
         # Arrange - system_prompt付きチャットを作成
         system_prompt = "You are a friendly assistant."

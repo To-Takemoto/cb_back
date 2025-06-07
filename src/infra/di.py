@@ -1,10 +1,10 @@
 from functools import lru_cache
 from typing import Optional
 from ..usecase.chat_interaction.message_cache import MessageCache
-from .sqlite_client.chat_repo import ChatRepo
+from .tortoise_client.chat_repo import TortoiseChatRepository
 from .openrouter_client import OpenRouterLLMService
-from .sqlite_client.user_repository import SqliteUserRepository
-from .sqlite_client.peewee_models import User
+from .tortoise_client.user_repository import TortoiseUserRepository
+from .tortoise_client.models import User
 from ..port.llm_client import LLMClient
 from ..port.chat_repo import ChatRepository
 from ..port.user_repository import UserRepository as UserRepositoryPort
@@ -35,30 +35,29 @@ class DIContainer:
     def user_repository(self) -> UserRepositoryPort:
         """ユーザーリポジトリのシングルトンインスタンスを取得"""
         if self._user_repository is None:
-            self._user_repository = SqliteUserRepository()
+            self._user_repository = TortoiseUserRepository()
         return self._user_repository
     
-    def create_chat_repo_for_user(self, user_uuid: str) -> ChatRepository:
+    async def create_chat_repo_for_user(self, user_uuid: str) -> ChatRepository:
         """指定されたユーザー用のChatRepoインスタンスを作成"""
-        from peewee import DoesNotExist
         from ..domain.exception.user_exceptions import UserNotFoundError
         
         try:
-            user = User.get(User.uuid == user_uuid)
-            return ChatRepo(user_id=user.id)
-        except DoesNotExist:
-            raise UserNotFoundError(f"User not found: {user_uuid}")
+            user = await User.get(uuid=user_uuid)
+            return TortoiseChatRepository(user_id=user.id)
+        except Exception as e:
+            raise UserNotFoundError(f"User not found: {user_uuid}") from e
 
 # グローバルDIコンテナインスタンス
 _container = DIContainer()
 
 def get_chat_repo_client():
     """レガシー関数：認証が必要なエンドポイントでは使用しない"""
-    return ChatRepo(user_id=1)
+    return TortoiseChatRepository(user_id=1)
 
-def create_chat_repo_for_user(user_uuid: str) -> ChatRepository:
+async def create_chat_repo_for_user(user_uuid: str) -> ChatRepository:
     """指定されたユーザー用のChatRepoインスタンスを作成"""
-    return _container.create_chat_repo_for_user(user_uuid)
+    return await _container.create_chat_repo_for_user(user_uuid)
 
 def get_llm_client() -> LLMClient:
     """LLMクライアントを取得"""

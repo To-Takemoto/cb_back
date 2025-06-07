@@ -7,34 +7,37 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from fastapi.testclient import TestClient
 from src.infra.rest_api.main import app
-from src.infra.sqlite_client.peewee_models import (
-    db_proxy, User, PromptTemplate, ConversationPreset
+from tortoise import Tortoise
+from src.infra.tortoise_client.models import (
+    User, PromptTemplate, ConversationPreset
 )
 from src.infra.auth import get_password_hash
-from peewee import SqliteDatabase
 
 
 @pytest.fixture(scope="function")
-def setup_test_db():
+async def setup_test_db():
     """テスト用データベースをセットアップ"""
-    # インメモリデータベースを使用
-    test_db = SqliteDatabase(':memory:')
-    db_proxy.initialize(test_db)
+    from src.infra.tortoise_client.config import TORTOISE_ORM
     
-    # テーブルを作成
-    test_db.create_tables([User, PromptTemplate, ConversationPreset])
+    # テスト用のインメモリデータベース設定
+    test_config = {
+        "connections": {"default": "sqlite://:memory:"},
+        "apps": TORTOISE_ORM["apps"]
+    }
     
-    yield test_db
+    await Tortoise.init(config=test_config)
+    await Tortoise.generate_schemas()
+    
+    yield
     
     # クリーンアップ
-    test_db.drop_tables([User, PromptTemplate, ConversationPreset])
-    test_db.close()
+    await Tortoise.close_connections()
 
 
 @pytest.fixture
-def test_user(setup_test_db):
+async def test_user(setup_test_db):
     """テスト用ユーザーを作成"""
-    user = User.create(
+    user = await User.create(
         uuid="test-user-uuid",
         name="testuser",
         password=get_password_hash("testpass")
@@ -87,17 +90,18 @@ class TestTemplateAPI:
             assert data["variables"] == ["code"]
             assert data["usage_count"] == 0
     
-    def test_get_templates_list(self, setup_test_db, auth_headers, test_user):
+    @pytest.mark.asyncio
+    async def test_get_templates_list(self, setup_test_db, auth_headers, test_user):
         """テンプレート一覧取得のテスト"""
         # テストデータを事前作成
-        PromptTemplate.create(
-            user=test_user.id,
+        await PromptTemplate.create(
+            user=test_user,
             name="Test Template 1",
             template_content="Template content 1",
             category="test"
         )
-        PromptTemplate.create(
-            user=test_user.id,
+        await PromptTemplate.create(
+            user=test_user,
             name="Test Template 2",
             template_content="Template content 2",
             category="test",
@@ -116,18 +120,19 @@ class TestTemplateAPI:
             assert len(data["items"]) == 2
             assert data["items"][0]["name"] in ["Test Template 1", "Test Template 2"]
     
-    def test_get_templates_with_filters(self, setup_test_db, auth_headers, test_user):
+    @pytest.mark.asyncio
+    async def test_get_templates_with_filters(self, setup_test_db, auth_headers, test_user):
         """フィルター付きテンプレート一覧取得のテスト"""
         # テストデータを事前作成
-        PromptTemplate.create(
-            user=test_user.id,
+        await PromptTemplate.create(
+            user=test_user,
             name="Favorite Template",
             template_content="Favorite content",
             category="favorite",
             is_favorite=True
         )
-        PromptTemplate.create(
-            user=test_user.id,
+        await PromptTemplate.create(
+            user=test_user,
             name="Regular Template",
             template_content="Regular content",
             category="regular",
@@ -157,11 +162,12 @@ class TestTemplateAPI:
             assert data["total"] == 1
             assert data["items"][0]["name"] == "Regular Template"
     
-    def test_update_template(self, setup_test_db, auth_headers, test_user):
+    @pytest.mark.asyncio
+    async def test_update_template(self, setup_test_db, auth_headers, test_user):
         """テンプレート更新のテスト"""
         # テストデータを事前作成
-        template = PromptTemplate.create(
-            user=test_user.id,
+        template = await PromptTemplate.create(
+            user=test_user,
             name="Original Template",
             template_content="Original content",
             category="original"
@@ -186,11 +192,12 @@ class TestTemplateAPI:
             assert data["template_content"] == "Updated content"
             assert data["is_favorite"] == True
     
-    def test_delete_template(self, setup_test_db, auth_headers, test_user):
+    @pytest.mark.asyncio
+    async def test_delete_template(self, setup_test_db, auth_headers, test_user):
         """テンプレート削除のテスト"""
         # テストデータを事前作成
-        template = PromptTemplate.create(
-            user=test_user.id,
+        template = await PromptTemplate.create(
+            user=test_user,
             name="To Be Deleted",
             template_content="Delete me"
         )
@@ -211,11 +218,12 @@ class TestTemplateAPI:
             )
             assert response.status_code == 404
     
-    def test_template_usage_increment(self, setup_test_db, auth_headers, test_user):
+    @pytest.mark.asyncio
+    async def test_template_usage_increment(self, setup_test_db, auth_headers, test_user):
         """テンプレート使用回数増加のテスト"""
         # テストデータを事前作成
-        template = PromptTemplate.create(
-            user=test_user.id,
+        template = await PromptTemplate.create(
+            user=test_user,
             name="Usage Test Template",
             template_content="Test content",
             usage_count=0
@@ -267,18 +275,19 @@ class TestPresetAPI:
             assert data["temperature"] == 0.3
             assert data["max_tokens"] == 2000
     
-    def test_get_presets_list(self, setup_test_db, auth_headers, test_user):
+    @pytest.mark.asyncio
+    async def test_get_presets_list(self, setup_test_db, auth_headers, test_user):
         """プリセット一覧取得のテスト"""
         # テストデータを事前作成
-        ConversationPreset.create(
-            user=test_user.id,
+        await ConversationPreset.create(
+            user=test_user,
             name="Preset 1",
             model_id="gpt-3.5-turbo",
             temperature="0.7",
             max_tokens=1000
         )
-        ConversationPreset.create(
-            user=test_user.id,
+        await ConversationPreset.create(
+            user=test_user,
             name="Preset 2",
             model_id="gpt-4",
             temperature="0.5",
@@ -297,11 +306,12 @@ class TestPresetAPI:
             assert data["total"] == 2
             assert len(data["items"]) == 2
     
-    def test_update_preset(self, setup_test_db, auth_headers, test_user):
+    @pytest.mark.asyncio
+    async def test_update_preset(self, setup_test_db, auth_headers, test_user):
         """プリセット更新のテスト"""
         # テストデータを事前作成
-        preset = ConversationPreset.create(
-            user=test_user.id,
+        preset = await ConversationPreset.create(
+            user=test_user,
             name="Original Preset",
             model_id="gpt-3.5-turbo",
             temperature="0.7",

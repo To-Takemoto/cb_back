@@ -52,7 +52,7 @@ def get_user_repository_dependency() -> UserRepository:
     """
     return get_user_repository()
 
-def get_chat_interaction_for_user(
+async def get_chat_interaction_for_user(
     current_user_id: Annotated[str, Depends(get_current_user)],
     llm_client: Annotated[LLMClient, Depends(get_llm_client_dependency)],
     cache: Annotated[MessageCache, Depends(get_message_cache_dependency)]
@@ -71,7 +71,7 @@ def get_chat_interaction_for_user(
     Returns:
         ChatInteraction: ユーザー専用のチャットインタラクションインスタンス
     """
-    chat_repo = create_chat_repo_for_user(current_user_id)
+    chat_repo = await create_chat_repo_for_user(current_user_id)
     return ChatInteraction(chat_repo, llm_client, cache)
 
 def get_register_user_usecase(

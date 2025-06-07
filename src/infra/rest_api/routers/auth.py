@@ -20,7 +20,7 @@ async def login(
     user_repository: UserRepository = Depends(get_user_repository)
 ):
     # Get user from database
-    user = user_repository.get_user_by_name(form_data.username)
+    user = await user_repository.get_user_by_name(form_data.username)
     
     if not user:
         logger.warning("Login attempt for non-existent user", extra={"username": form_data.username})
@@ -80,7 +80,7 @@ async def get_current_user_info(
     user_repository: UserRepository = Depends(get_user_repository)
 ):
     # Get user from database by UUID
-    users = user_repository.get_all_users()
+    users = await user_repository.get_all_users()
     user = next((u for u in users if u.uuid == current_user_id), None)
     
     if not user:

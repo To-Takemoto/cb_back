@@ -80,9 +80,8 @@ class TestLLMDetails:
         assert saved_message.role == Role.ASSISTANT
         
         # LLMDetailsが保存されたことを確認
-        llm_record = LLMDetails.get_or_none(
-            LLMDetails.message == mm.get(mm.uuid == saved_message.uuid)
-        )
+        message_record = await mm.filter(uuid=saved_message.uuid).first()
+        llm_record = await LLMDetails.filter(message=message_record).first()
         assert llm_record is not None
         assert llm_record.model == "gpt-4"
         assert llm_record.provider == "openrouter"
@@ -113,9 +112,8 @@ class TestLLMDetails:
         assert saved_message.role == Role.USER
         
         # LLMDetailsが保存されていないことを確認
-        llm_record = LLMDetails.get_or_none(
-            LLMDetails.message == mm.get(mm.uuid == saved_message.uuid)
-        )
+        message_record = await mm.filter(uuid=saved_message.uuid).first()
+        llm_record = await LLMDetails.filter(message=message_record).first()
         assert llm_record is None
     
     def test_save_message_with_partial_llm_details(self):
@@ -140,9 +138,8 @@ class TestLLMDetails:
         )
         
         # Assert
-        llm_record = LLMDetails.get_or_none(
-            LLMDetails.message == mm.get(mm.uuid == saved_message.uuid)
-        )
+        message_record = await mm.filter(uuid=saved_message.uuid).first()
+        llm_record = await LLMDetails.filter(message=message_record).first()
         assert llm_record is not None
         assert llm_record.model == "gpt-3.5-turbo"
         assert llm_record.provider == "openrouter"  # デフォルト値
@@ -173,9 +170,8 @@ class TestLLMDetails:
         )
         
         # LLM詳細が存在することを確認
-        llm_record = LLMDetails.get_or_none(
-            LLMDetails.message == mm.get(mm.uuid == saved_message.uuid)
-        )
+        message_record = await mm.filter(uuid=saved_message.uuid).first()
+        llm_record = await LLMDetails.filter(message=message_record).first()
         assert llm_record is not None
         
         # Act - メッセージを削除
@@ -189,11 +185,9 @@ class TestLLMDetails:
         assert result is True
         
         # メッセージが削除されたことを確認
-        deleted_message = mm.get_or_none(mm.uuid == saved_message.uuid)
+        deleted_message = await mm.filter(uuid=saved_message.uuid).first()
         assert deleted_message is None
         
         # LLM詳細も削除されたことを確認
-        deleted_llm_record = LLMDetails.get_or_none(
-            LLMDetails.id == llm_record.id
-        )
+        deleted_llm_record = await LLMDetails.filter(id=llm_record.id).first()
         assert deleted_llm_record is None

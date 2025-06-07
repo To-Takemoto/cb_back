@@ -19,7 +19,7 @@ class ChatRepository(Protocol):
         """
         pass
 
-    def save_message(
+    async def save_message(
             self,
             discussion_structure_uuid: str,
             message_dto: MessageDTO,
@@ -37,7 +37,7 @@ class ChatRepository(Protocol):
         """
         pass
 
-    def init_structure(self, initial_message: MessageEntity) -> tuple[ChatTree, MessageEntity]:
+    async def init_structure(self, initial_message: MessageEntity) -> tuple[ChatTree, MessageEntity]:
         """
         新しいチャット構造を初期化し、指定された初期メッセージを保存します。
         
@@ -49,7 +49,7 @@ class ChatRepository(Protocol):
         """
         pass
 
-    def load_tree(self, uuid: str) -> ChatTree:
+    async def load_tree(self, uuid: str) -> ChatTree:
         """
         指定されたUUIDのチャットツリー構造を読み込みます。
         
@@ -61,7 +61,7 @@ class ChatRepository(Protocol):
         """
         pass
 
-    def update_tree(self, new_tree: ChatTree) -> None:
+    async def update_tree(self, new_tree: ChatTree) -> None:
         """
         チャットツリー構造を更新します。
         
@@ -70,7 +70,7 @@ class ChatRepository(Protocol):
         """
         pass
     
-    def get_latest_message_by_discussion(self, discussion_uuid: str) -> MessageEntity:
+    async def get_latest_message_by_discussion(self, discussion_uuid: str) -> MessageEntity:
         """
         指定されたディスカッションの最新メッセージを取得します。
         
@@ -86,7 +86,7 @@ class ChatRepository(Protocol):
         """
         pass
 
-    def get_history(self, uuid_list: list[str]) -> list[MessageEntity]:
+    async def get_history(self, uuid_list: list[str]) -> list[MessageEntity]:
         """
         指定されたUUIDリストに対応するメッセージ履歴を取得します。
         
@@ -102,7 +102,7 @@ class ChatRepository(Protocol):
         pass
     
     
-    def get_recent_chats(self, user_uuid: str, limit: int = 10) -> list[dict]:
+    async def get_recent_chats(self, user_uuid: str, limit: int = 10) -> list[dict]:
         """
         ユーザーの最近のチャット一覧を取得します。
         
@@ -115,7 +115,7 @@ class ChatRepository(Protocol):
         """
         pass
     
-    def delete_chat(self, chat_uuid: str, user_uuid: str) -> bool:
+    async def delete_chat(self, chat_uuid: str, user_uuid: str) -> bool:
         """
         チャットを削除します。
         
@@ -128,7 +128,7 @@ class ChatRepository(Protocol):
         """
         pass
     
-    def search_messages(self, chat_uuid: str, query: str) -> list[dict]:
+    async def search_messages(self, chat_uuid: str, query: str) -> list[dict]:
         """
         チャット内のメッセージを検索します。
         
@@ -141,7 +141,7 @@ class ChatRepository(Protocol):
         """
         pass
     
-    def get_chats_by_date(self, user_uuid: str, date_filter: str) -> list[dict]:
+    async def get_chats_by_date(self, user_uuid: str, date_filter: str) -> list[dict]:
         """
         日付でフィルタリングしたチャット一覧を取得します。
         
@@ -154,7 +154,7 @@ class ChatRepository(Protocol):
         """
         pass
     
-    def get_user_chat_count(self, user_uuid: str) -> int:
+    async def get_user_chat_count(self, user_uuid: str) -> int:
         """
         ユーザーの全チャット数を取得します。
         
@@ -166,7 +166,7 @@ class ChatRepository(Protocol):
         """
         pass
     
-    def get_recent_chats_paginated(self, user_uuid: str, limit: int, offset: int) -> list[dict]:
+    async def get_recent_chats_paginated(self, user_uuid: str, limit: int, offset: int) -> list[dict]:
         """
         ユーザーの最近のチャット一覧をページネーションで取得します。
         
@@ -180,7 +180,7 @@ class ChatRepository(Protocol):
         """
         pass
     
-    def get_chat_metadata(self, chat_uuid: str, user_uuid: str) -> Optional[dict]:
+    async def get_chat_metadata(self, chat_uuid: str, user_uuid: str) -> Optional[dict]:
         """
         チャットのメタデータを取得します。
         
@@ -193,7 +193,7 @@ class ChatRepository(Protocol):
         """
         pass
     
-    def update_chat(self, chat_uuid: str, user_uuid: str, title: Optional[str], system_prompt: Optional[str]) -> bool:
+    async def update_chat(self, chat_uuid: str, user_uuid: str, title: Optional[str], system_prompt: Optional[str]) -> bool:
         """
         チャットのタイトルやシステムプロンプトを更新します。
         
@@ -208,7 +208,7 @@ class ChatRepository(Protocol):
         """
         pass
     
-    def edit_message(self, chat_uuid: str, message_id: str, user_uuid: str, content: str) -> bool:
+    async def edit_message(self, chat_uuid: str, message_id: str, user_uuid: str, content: str) -> bool:
         """
         メッセージの内容を編集します。
         
@@ -223,7 +223,7 @@ class ChatRepository(Protocol):
         """
         pass
     
-    def delete_message(self, chat_uuid: str, message_id: str, user_uuid: str) -> bool:
+    async def delete_message(self, chat_uuid: str, message_id: str, user_uuid: str) -> bool:
         """
         メッセージを削除します。
         
@@ -237,7 +237,7 @@ class ChatRepository(Protocol):
         """
         pass
     
-    def search_and_paginate_chats(self, user_uuid: str, query: Optional[str], sort: Optional[str], limit: int, offset: int) -> dict:
+    async def search_and_paginate_chats(self, user_uuid: str, query: Optional[str], sort: Optional[str], limit: int, offset: int) -> dict:
         """
         チャットを検索・ソート・ページネーションで取得します。
         

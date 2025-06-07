@@ -7,13 +7,13 @@ select nodeとメッセージ送信の動作を確認
 import asyncio
 import json
 from typing import Dict, Any
-from src.infra.sqlite_client.chat_repo import ChatRepo
+from src.infra.tortoise_client.chat_repo import TortoiseChatRepository
 from src.usecase.chat_interaction.main import ChatInteraction
 from src.usecase.chat_interaction.message_cache import MessageCache
 from src.port.dto.message_dto import MessageDTO
 from src.domain.entity.message_entity import Role
-from src.infra.sqlite_client.peewee_models import User, db_proxy
-from peewee import SqliteDatabase
+from tortoise import Tortoise
+from src.infra.tortoise_client.models import User
 
 class BranchingTest:
     def __init__(self):

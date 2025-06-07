@@ -7,10 +7,10 @@ LLMを使って自動的にチャットタイトルが生成されることを�
 
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
-from src.infra.sqlite_client.peewee_models import (
-    User, DiscussionStructure, Message as mm, LLMDetails, db_proxy
+from src.infra.tortoise_client.models import (
+    User, DiscussionStructure, Message as mm, LLMDetails
 )
-from peewee import SqliteDatabase
+from tortoise import Tortoise
 from src.infra.sqlite_client.chat_repo import ChatRepo
 from src.port.dto.message_dto import MessageDTO
 from src.domain.entity.message_entity import Role
@@ -21,18 +21,18 @@ import uuid as uuidGen
 
 class TestTitleGeneration:
     @pytest.fixture(autouse=True)
-    def setup(self):
+    async def setup(self):
         """各テストの前にデータベースをセットアップ"""
         # テスト用インメモリデータベースを初期化
-        test_db = SqliteDatabase(':memory:')
-        db_proxy.initialize(test_db)
-        
-        test_db.connect()
-        test_db.create_tables([User, DiscussionStructure, mm, LLMDetails])
+        await Tortoise.init(
+            db_url="sqlite://:memory:",
+            modules={"models": ["src.infra.tortoise_client.models"]}
+        )
+        await Tortoise.generate_schemas()
         
         # テストユーザーを作成
         self.test_user_id = str(uuidGen.uuid4())
-        self.test_user = User.create(
+        self.test_user = await User.create(
             name="testuser",
             uuid=self.test_user_id,
             password="dummy_hash"
@@ -41,8 +41,7 @@ class TestTitleGeneration:
         yield
         
         # テスト後にクリーンアップ
-        test_db.drop_tables([LLMDetails, mm, DiscussionStructure, User])
-        test_db.close()
+        await Tortoise.close_connections()
     
     @pytest.mark.asyncio
     async def test_title_generation_after_first_assistant_response(self):
@@ -94,7 +93,7 @@ class TestTitleGeneration:
         
         # データベースでタイトルが更新されたことを確認
         chat_uuid = interaction.structure.get_uuid()
-        chat = DiscussionStructure.get(DiscussionStructure.uuid == chat_uuid)
+        chat = await DiscussionStructure.filter(uuid=chat_uuid).first()
         assert chat.title == "Python Programming Help"
     
     @pytest.mark.asyncio

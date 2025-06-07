@@ -6,34 +6,37 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from fastapi.testclient import TestClient
 from src.infra.rest_api.main import app
-from src.infra.sqlite_client.peewee_models import (
-    db_proxy, User, DiscussionStructure, Message, LLMDetails, AvailableModelCache
+from tortoise import Tortoise
+from src.infra.tortoise_client.models import (
+    User, DiscussionStructure, Message, LLMDetails, AvailableModelCache
 )
 from src.infra.auth import get_password_hash
-from peewee import SqliteDatabase
 
 
 @pytest.fixture(scope="function")
-def setup_test_db():
+async def setup_test_db():
     """テスト用データベースをセットアップ"""
-    # インメモリデータベースを使用
-    test_db = SqliteDatabase(':memory:')
-    db_proxy.initialize(test_db)
+    from src.infra.tortoise_client.config import TORTOISE_ORM
     
-    # テーブルを作成
-    test_db.create_tables([User, DiscussionStructure, Message, LLMDetails, AvailableModelCache])
+    # テスト用のインメモリデータベース設定
+    test_config = {
+        "connections": {"default": "sqlite://:memory:"},
+        "apps": TORTOISE_ORM["apps"]
+    }
     
-    yield test_db
+    await Tortoise.init(config=test_config)
+    await Tortoise.generate_schemas()
+    
+    yield
     
     # クリーンアップ
-    test_db.drop_tables([User, DiscussionStructure, Message, LLMDetails, AvailableModelCache])
-    test_db.close()
+    await Tortoise.close_connections()
 
 
 @pytest.fixture
-def test_user(setup_test_db):
+async def test_user(setup_test_db):
     """テスト用ユーザーを作成"""
-    user = User.create(
+    user = await User.create(
         uuid="test-user-uuid",
         name="testuser",
         password=get_password_hash("testpass")
@@ -58,10 +61,10 @@ def auth_headers(test_user):
 
 
 @pytest.fixture
-def test_data(setup_test_db, test_user):
+async def test_data(setup_test_db, test_user):
     """テスト用のメッセージ・統計データを作成"""
     # モデルキャッシュを作成
-    model1 = AvailableModelCache.create(
+    model1 = await AvailableModelCache.create(
         id="gpt-3.5-turbo",
         name="GPT-3.5 Turbo",
         description="Fast and efficient",
@@ -71,7 +74,7 @@ def test_data(setup_test_db, test_user):
         created=1640995200
     )
     
-    model2 = AvailableModelCache.create(
+    model2 = await AvailableModelCache.create(
         id="gpt-4",
         name="GPT-4",
         description="Advanced reasoning",
@@ -82,21 +85,21 @@ def test_data(setup_test_db, test_user):
     )
     
     # ディスカッション（チャット）を作成
-    discussion = DiscussionStructure.create(
-        user=test_user.id,
+    discussion = await DiscussionStructure.create(
+        user=test_user,
         uuid="test-discussion-uuid",
         title="Test Chat",
         serialized_structure=b'test_data'
     )
     
     # 過去7日間のメッセージを作成
-    now = datetime.datetime.now()
+    now = datetime.datetime.utcnow()
     for i in range(7):
         date = now - datetime.timedelta(days=i)
         
         # ユーザーメッセージ
-        user_msg = Message.create(
-            discussion=discussion.id,
+        user_msg = await Message.create(
+            discussion=discussion,
             uuid=f"user-msg-{i}",
             role="user",
             content=f"User message {i}",
@@ -104,8 +107,8 @@ def test_data(setup_test_db, test_user):
         )
         
         # アシスタントメッセージ
-        assistant_msg = Message.create(
-            discussion=discussion.id,
+        assistant_msg = await Message.create(
+            discussion=discussion,
             uuid=f"assistant-msg-{i}",
             role="assistant",
             content=f"Assistant response {i}",
@@ -114,8 +117,8 @@ def test_data(setup_test_db, test_user):
         
         # LLM詳細（トークン使用量とコスト計算用）
         model_id = "gpt-3.5-turbo" if i % 2 == 0 else "gpt-4"
-        LLMDetails.create(
-            message=assistant_msg.id,
+        await LLMDetails.create(
+            message=assistant_msg,
             model=model_id,
             provider="openrouter",
             prompt_tokens=100 + i * 10,
@@ -133,7 +136,8 @@ def test_data(setup_test_db, test_user):
 class TestAnalyticsAPI:
     """アナリティクスAPI関連のテスト"""
     
-    def test_get_analytics_overview(self, setup_test_db, auth_headers, test_data):
+    @pytest.mark.asyncio
+    async def test_get_analytics_overview(self, setup_test_db, auth_headers, test_data):
         """使用統計概要取得のテスト"""
         with TestClient(app) as client:
             response = client.get(
@@ -154,7 +158,8 @@ class TestAnalyticsAPI:
             # 7日間で7つのアシスタントメッセージがあることを確認
             assert data["total_messages"] >= 7
     
-    def test_get_model_breakdown(self, setup_test_db, auth_headers, test_data):
+    @pytest.mark.asyncio
+    async def test_get_model_breakdown(self, setup_test_db, auth_headers, test_data):
         """モデル別使用統計のテスト"""
         with TestClient(app) as client:
             response = client.get(
@@ -185,7 +190,8 @@ class TestAnalyticsAPI:
                 assert isinstance(model["token_count"], int)
                 assert isinstance(model["cost"], (int, float))
     
-    def test_get_daily_usage(self, setup_test_db, auth_headers, test_data):
+    @pytest.mark.asyncio
+    async def test_get_daily_usage(self, setup_test_db, auth_headers, test_data):
         """日別使用統計のテスト"""
         with TestClient(app) as client:
             response = client.get(
@@ -212,7 +218,8 @@ class TestAnalyticsAPI:
                 assert isinstance(day["token_count"], int)
                 assert isinstance(day["cost"], (int, float))
     
-    def test_get_hourly_pattern(self, setup_test_db, auth_headers, test_data):
+    @pytest.mark.asyncio
+    async def test_get_hourly_pattern(self, setup_test_db, auth_headers, test_data):
         """時間帯別使用パターンのテスト"""
         with TestClient(app) as client:
             response = client.get(
@@ -238,7 +245,8 @@ class TestAnalyticsAPI:
                 assert isinstance(hour_data["message_count"], int)
                 assert isinstance(hour_data["token_count"], int)
     
-    def test_get_cost_analysis(self, setup_test_db, auth_headers, test_data):
+    @pytest.mark.asyncio
+    async def test_get_cost_analysis(self, setup_test_db, auth_headers, test_data):
         """コスト分析のテスト"""
         with TestClient(app) as client:
             response = client.get(
@@ -263,7 +271,8 @@ class TestAnalyticsAPI:
                 assert isinstance(trend["daily_cost"], (int, float))
                 assert isinstance(trend["cumulative_cost"], (int, float))
     
-    def test_get_full_analytics(self, setup_test_db, auth_headers, test_data):
+    @pytest.mark.asyncio
+    async def test_get_full_analytics(self, setup_test_db, auth_headers, test_data):
         """総合アナリティクス取得のテスト"""
         with TestClient(app) as client:
             response = client.get(
@@ -288,7 +297,8 @@ class TestAnalyticsAPI:
             assert "total_tokens" in overview
             assert "total_cost" in overview
     
-    def test_analytics_period_validation(self, setup_test_db, auth_headers, test_data):
+    @pytest.mark.asyncio
+    async def test_analytics_period_validation(self, setup_test_db, auth_headers, test_data):
         """期間パラメータのバリデーションテスト"""
         with TestClient(app) as client:
             # 有効な期間
@@ -307,7 +317,8 @@ class TestAnalyticsAPI:
             )
             assert response.status_code == 422
     
-    def test_analytics_with_model_filter(self, setup_test_db, auth_headers, test_data):
+    @pytest.mark.asyncio
+    async def test_analytics_with_model_filter(self, setup_test_db, auth_headers, test_data):
         """モデルフィルターのテスト"""
         with TestClient(app) as client:
             response = client.get(
@@ -327,9 +338,10 @@ class TestAnalyticsAPI:
 class TestAnalyticsRepository:
     """アナリティクスリポジトリのテスト"""
     
-    def test_period_parsing(self, setup_test_db):
+    @pytest.mark.asyncio
+    async def test_period_parsing(self, setup_test_db):
         """期間パースのテスト"""
-        from src.infra.sqlite_client.analytics_repository import AnalyticsRepository
+        from src.infra.tortoise_client.analytics_repository import TortoiseAnalyticsRepository as AnalyticsRepository
         
         repo = AnalyticsRepository()
         
