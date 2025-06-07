@@ -19,7 +19,6 @@ class User(Base):
     
     # Relationships
     discussion_structures = relationship("DiscussionStructure", back_populates="user", cascade="all, delete-orphan")
-    user_chat_positions = relationship("UserChatPosition", back_populates="user", cascade="all, delete-orphan")
 
 
 class DiscussionStructure(Base):
@@ -35,7 +34,6 @@ class DiscussionStructure(Base):
     # Relationships
     user = relationship("User", back_populates="discussion_structures")
     messages = relationship("Message", back_populates="discussion_structure", cascade="all, delete-orphan")
-    user_chat_positions = relationship("UserChatPosition", back_populates="discussion_structure", cascade="all, delete-orphan")
     
     # Indexes
     __table_args__ = (
@@ -77,24 +75,6 @@ class LLMDetails(Base):
     # Relationships
     message = relationship("Message", back_populates="llm_details")
 
-
-class UserChatPosition(Base):
-    __tablename__ = 'userchatposition'
-    
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
-    discussion_structure_id = Column(Integer, ForeignKey('discussionstructure.id'), nullable=False)
-    last_position = Column(String(255), nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow)
-    
-    # Relationships
-    user = relationship("User", back_populates="user_chat_positions")
-    discussion_structure = relationship("DiscussionStructure", back_populates="user_chat_positions")
-    
-    # Indexes
-    __table_args__ = (
-        Index('idx_position_user_discussion', 'user_id', 'discussion_structure_id', unique=True),
-    )
 
 
 class AvailableModel(Base):

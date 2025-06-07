@@ -9,6 +9,8 @@ from .routers.chats import router as chats_router
 from .routers.users import router as users_router
 from .routers.auth import router as auth_router
 from .routers.models import router as models_router
+from .routers.templates import router as templates_router
+from .routers.analytics import router as analytics_router
 from .error_handlers import (
     handle_timeout_error,
     handle_connection_error,
@@ -51,6 +53,8 @@ app.include_router(auth_router)
 app.include_router(chats_router)
 app.include_router(users_router)
 app.include_router(models_router)
+app.include_router(templates_router, prefix="/api/v1")
+app.include_router(analytics_router, prefix="/api/v1")
 
 @app.on_event("startup")
 async def startup_event():

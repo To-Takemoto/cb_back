@@ -1,0 +1,13 @@
+INFO:     Started server process [89184]
+INFO:     Waiting for application startup.
+{"timestamp": "2025-06-07T17:01:19.886911+00:00", "level": "INFO", "logger": "app", "message": "Application starting up", "module": "main", "function": "startup_event", "line": 62, "taskName": "Task-2", "environment": "development"}
+{"timestamp": "2025-06-07T17:01:19.887146+00:00", "level": "INFO", "logger": "app", "message": "Database connection initialized", "module": "main", "function": "startup_event", "line": 80, "taskName": "Task-2", "db_path": "./data/chat_app.db"}
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+{"timestamp": "2025-06-07T17:01:34.548140+00:00", "level": "INFO", "logger": "api.access", "message": "Request started", "module": "logging_config", "function": "dispatch", "line": 97, "taskName": "Task-5", "request_id": "17c2b203-047d-4bd3-ae95-5dd8c950022c", "method": "GET", "path": "/api/v1/templates", "client": "127.0.0.1"}
+{"timestamp": "2025-06-07T17:01:34.558439+00:00", "level": "INFO", "logger": "api.access", "message": "Request completed", "module": "logging_config", "function": "dispatch", "line": 112, "taskName": "Task-5", "request_id": "17c2b203-047d-4bd3-ae95-5dd8c950022c", "method": "GET", "path": "/api/v1/templates", "status_code": 200, "duration_ms": 10.36}
+INFO:     127.0.0.1:55940 - "GET /api/v1/templates HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [89184]

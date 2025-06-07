@@ -83,3 +83,43 @@ class AvailableModelCache(Model):
         database = db_proxy
         table_name = 'available_models'
 
+
+class PromptTemplate(Model):
+    """プロンプトテンプレートを管理するテーブル"""
+    
+    user = ForeignKeyField(User, backref='templates')
+    uuid = CharField(unique=True, default=lambda: str(uuid4()))
+    name = CharField()
+    description = TextField(null=True)
+    template_content = TextField()
+    category = CharField(null=True)
+    variables = TextField(null=True)  # JSON string for template variables
+    is_public = BooleanField(default=False)
+    is_favorite = BooleanField(default=False)
+    usage_count = IntegerField(default=0)
+    created_at = DateTimeField(default=datetime.datetime.now)
+    updated_at = DateTimeField(default=datetime.datetime.now)
+    
+    class Meta:
+        database = db_proxy
+
+
+class ConversationPreset(Model):
+    """会話設定のプリセットを管理するテーブル"""
+    
+    user = ForeignKeyField(User, backref='presets')
+    uuid = CharField(unique=True, default=lambda: str(uuid4()))
+    name = CharField()
+    description = TextField(null=True)
+    model_id = CharField()
+    temperature = CharField(default="0.7")  # Store as string to preserve precision
+    max_tokens = IntegerField(default=1000)
+    system_prompt = TextField(null=True)
+    is_favorite = BooleanField(default=False)
+    usage_count = IntegerField(default=0)
+    created_at = DateTimeField(default=datetime.datetime.now)
+    updated_at = DateTimeField(default=datetime.datetime.now)
+    
+    class Meta:
+        database = db_proxy
+

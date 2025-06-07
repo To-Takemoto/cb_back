@@ -23,8 +23,7 @@ def test_retry_endpoint_exists():
             return MockMessage()
     
     class MockChatRepo:
-        def update_last_position(self, chat_uuid, user_uuid, node_id):
-            pass
+        pass
     
     def mock_get_chat_interaction():
         return MockChatInteraction()
