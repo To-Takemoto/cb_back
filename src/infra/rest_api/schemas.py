@@ -4,6 +4,7 @@ import re
 
 class ChatCreateRequest(BaseModel):
     initial_message: Optional[Annotated[str, Field(max_length=4000)]] = None
+    model_id: Optional[str] = None
     
     @field_validator('initial_message')
     @classmethod
@@ -18,6 +19,7 @@ class ChatCreateResponse(BaseModel):
 class MessageRequest(BaseModel):
     content: Annotated[str, Field(min_length=1, max_length=4000)]
     parent_message_uuid: Optional[Annotated[str, Field(pattern=r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')]] = None
+    model_id: Optional[str] = None
     
     @field_validator('content')
     @classmethod

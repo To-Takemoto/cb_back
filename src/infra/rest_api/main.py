@@ -8,6 +8,7 @@ from slowapi.errors import RateLimitExceeded
 from .routers.chats import router as chats_router
 from .routers.users import router as users_router
 from .routers.auth import router as auth_router
+from .routers.models import router as models_router
 from .error_handlers import (
     handle_timeout_error,
     handle_connection_error,
@@ -49,6 +50,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(chats_router)
 app.include_router(users_router)
+app.include_router(models_router)
 
 @app.on_event("startup")
 async def startup_event():

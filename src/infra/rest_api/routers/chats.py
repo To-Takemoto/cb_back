@@ -3,6 +3,7 @@ from typing import Optional
 import asyncio
 
 from ..dependencies import get_message_cache_dependency, get_llm_client_dependency
+from ....usecase.model_management.model_service import ModelManagementService
 from src.infra.di import create_chat_repo_for_user
 from src.usecase.chat_interaction.main import ChatInteraction
 from src.infra.logging_config import get_logger
@@ -24,16 +25,38 @@ router = APIRouter(
 
 logger = get_logger("api.chats")
 
+def get_model_service(llm_client = Depends(get_llm_client_dependency)) -> ModelManagementService:
+    """モデル管理サービスの依存性注入"""
+    return ModelManagementService(llm_client)
+
 @router.post("/", response_model=ChatCreateResponse)
 async def create_chat(
     req: ChatCreateRequest,
     current_user_id: str = Depends(get_current_user),
     llm_client = Depends(get_llm_client_dependency),
-    cache = Depends(get_message_cache_dependency)
+    cache = Depends(get_message_cache_dependency),
+    model_service: ModelManagementService = Depends(get_model_service)
 ):
     """
     新しいチャットを開始し、チャットUUIDを返す
     """
+    # モデルが指定されている場合はバリデーションして設定
+    if req.model_id:
+        try:
+            available_models = await model_service.get_available_models()
+            if not model_service.validate_model_id(req.model_id, available_models):
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Model '{req.model_id}' is not available"
+                )
+            model_service.set_model(req.model_id)
+            logger.info(f"Model set to {req.model_id} for new chat by user {current_user_id}")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to set model {req.model_id} for user {current_user_id}", exc_info=True)
+            raise HTTPException(status_code=500, detail="Failed to set model")
+    
     # Create user-specific chat repo and interaction
     chat_repo = create_chat_repo_for_user(current_user_id)
     interaction = ChatInteraction(chat_repo, llm_client, cache)
@@ -48,12 +71,30 @@ async def send_message(
     req: MessageRequest,
     current_user_id: str = Depends(get_current_user),
     llm_client = Depends(get_llm_client_dependency),
-    cache = Depends(get_message_cache_dependency)
+    cache = Depends(get_message_cache_dependency),
+    model_service: ModelManagementService = Depends(get_model_service)
 ):
     """
     既存チャットにメッセージを送信し、アシスタントの応答を返す
     parent_message_uuidが指定されている場合、その親から分岐させる
     """
+    # モデルが指定されている場合はバリデーションして設定
+    if req.model_id:
+        try:
+            available_models = await model_service.get_available_models()
+            if not model_service.validate_model_id(req.model_id, available_models):
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Model '{req.model_id}' is not available"
+                )
+            model_service.set_model(req.model_id)
+            logger.info(f"Model set to {req.model_id} for message in chat {chat_uuid} by user {current_user_id}")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to set model {req.model_id} for user {current_user_id}", exc_info=True)
+            raise HTTPException(status_code=500, detail="Failed to set model")
+    
     # Create user-specific chat repo and interaction
     chat_repo = create_chat_repo_for_user(current_user_id)
     interaction = ChatInteraction(chat_repo, llm_client, cache)
