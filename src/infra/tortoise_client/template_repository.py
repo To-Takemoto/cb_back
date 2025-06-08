@@ -7,36 +7,34 @@ from datetime import datetime
 from tortoise.exceptions import DoesNotExist
 
 from .models import PromptTemplate, ConversationPreset, User
+from src.port.template_repository import TemplateRepositoryPort, PresetRepositoryPort
+from src.port.dto.template_dto import (
+    PromptTemplateDto, ConversationPresetDto,
+    TemplateSearchCriteria, PresetSearchCriteria
+)
 
 
-class TortoiseTemplateRepository:
+class TortoiseTemplateRepository(TemplateRepositoryPort):
     """プロンプトテンプレートのTortoise ORMリポジトリ"""
     
-    async def create_template(
-        self,
-        user_id: str,
-        name: str,
-        template_content: str,
-        description: Optional[str] = None,
-        category: Optional[str] = None,
-        variables: Optional[List[str]] = None,
-        is_public: bool = False
-    ) -> PromptTemplate:
+    async def create_template(self, template: PromptTemplateDto) -> PromptTemplateDto:
         """テンプレートを新規作成"""
-        variables_json = json.dumps(variables) if variables else None
+        variables_json = json.dumps(template.variables) if template.variables else None
         
-        user = await User.get(uuid=user_id)
+        user = await User.get(id=template.user_id)
         
-        template = await PromptTemplate.create(
+        orm_template = await PromptTemplate.create(
             user=user,
-            name=name,
-            description=description,
-            template_content=template_content,
-            category=category,
+            uuid=template.uuid,
+            name=template.name,
+            description=template.description,
+            template_content=template.template_content,
+            category=template.category,
             variables=variables_json,
-            is_public=is_public
+            is_public=template.is_public,
+            is_favorite=template.is_favorite
         )
-        return template
+        return self._orm_to_dto(orm_template)
     
     async def get_template_by_uuid(self, template_uuid: str, user_id: str) -> Optional[PromptTemplate]:
         """UUIDでテンプレートを取得（ユーザー所有またはパブリック）"""
@@ -142,13 +140,15 @@ class TortoiseTemplateRepository:
             return False
     
     async def increment_usage_count(self, template_uuid: str) -> bool:
-        """使用回数をインクリメント"""
+        """使用回数をインクリメント（原子性保証）"""
+        from tortoise.transactions import in_transaction
         try:
-            template = await PromptTemplate.get(uuid=template_uuid)
-            template.usage_count += 1
-            template.updated_at = datetime.utcnow()
-            await template.save()
-            return True
+            async with in_transaction():
+                template = await PromptTemplate.get(uuid=template_uuid)
+                template.usage_count += 1
+                template.updated_at = datetime.utcnow()
+                await template.save()
+                return True
         except DoesNotExist:
             return False
     
@@ -170,7 +170,7 @@ class TortoiseTemplateRepository:
         return categories
 
 
-class TortoisePresetRepository:
+class TortoisePresetRepository(PresetRepositoryPort):
     """会話プリセットのTortoise ORMリポジトリ"""
     
     async def create_preset(
@@ -280,12 +280,14 @@ class TortoisePresetRepository:
             return False
     
     async def increment_usage_count(self, preset_uuid: str) -> bool:
-        """使用回数をインクリメント"""
+        """使用回数をインクリメント（原子性保証）"""
+        from tortoise.transactions import in_transaction
         try:
-            preset = await ConversationPreset.get(uuid=preset_uuid)
-            preset.usage_count += 1
-            preset.updated_at = datetime.utcnow()
-            await preset.save()
-            return True
+            async with in_transaction():
+                preset = await ConversationPreset.get(uuid=preset_uuid)
+                preset.usage_count += 1
+                preset.updated_at = datetime.utcnow()
+                await preset.save()
+                return True
         except DoesNotExist:
             return False

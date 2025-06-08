@@ -61,47 +61,50 @@ class TortoiseChatRepository(ChatRepository):
 
     async def init_structure(self, initial_message: MessageEntity) -> Tuple[ChatTree, MessageEntity]:
         """新しいチャット構造を初期化し、指定された初期メッセージを保存"""
-        user = await User.get(id=self.user_id)
+        from tortoise.transactions import in_transaction
         
-        # 新しいディスカッション構造を作成
-        discussion_uuid = str(uuidGen.uuid4())
-        
-        # 初期のチャット構造を作成
-        root_node = ChatStructure(message_uuid=initial_message.uuid)
-        chat_tree = ChatTree(
-            id=0,  # Will be set after creation
-            uuid=discussion_uuid,
-            tree=root_node
-        )
-        
-        # ディスカッション構造をDBに保存
-        discussion = await DiscussionStructure.create(
-            user=user,
-            uuid=discussion_uuid,
-            title=None,
-            system_prompt=None,
-            serialized_structure=chat_tree.get_tree_bin(),
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
-        )
-        
-        # 初期メッセージを保存
-        message = await Message.create(
-            discussion=discussion,
-            uuid=initial_message.uuid,
-            role=initial_message.role.value,
-            content=initial_message.content,
-            created_at=datetime.utcnow()
-        )
-        
-        saved_message = MessageEntity(
-            id=message.id,
-            uuid=message.uuid,
-            role=Role(message.role),
-            content=message.content
-        )
-        
-        return chat_tree, saved_message
+        async with in_transaction():
+            user = await User.get(id=self.user_id)
+            
+            # 新しいディスカッション構造を作成
+            discussion_uuid = str(uuidGen.uuid4())
+            
+            # 初期のチャット構造を作成
+            root_node = ChatStructure(message_uuid=initial_message.uuid)
+            chat_tree = ChatTree(
+                id=0,  # Will be set after creation
+                uuid=discussion_uuid,
+                tree=root_node
+            )
+            
+            # ディスカッション構造をDBに保存
+            discussion = await DiscussionStructure.create(
+                user=user,
+                uuid=discussion_uuid,
+                title=None,
+                system_prompt=None,
+                serialized_structure=chat_tree.get_tree_bin(),
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            
+            # 初期メッセージを保存
+            message = await Message.create(
+                discussion=discussion,
+                uuid=initial_message.uuid,
+                role=initial_message.role.value,
+                content=initial_message.content,
+                created_at=datetime.utcnow()
+            )
+            
+            saved_message = MessageEntity(
+                id=message.id,
+                uuid=message.uuid,
+                role=Role(message.role),
+                content=message.content
+            )
+            
+            return chat_tree, saved_message
 
     async def load_tree(self, uuid: str) -> ChatTree:
         """指定されたUUIDのチャットツリー構造を読み込み"""

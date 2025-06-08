@@ -545,27 +545,37 @@ async def send_message_stream(
             
             # ストリーミングチャットを実行
             final_message = None
-            async for message_chunk in interaction.continue_chat_stream(req.content):
-                if message_chunk.is_streaming:
-                    # ストリーミング中の部分データ
-                    chunk_data = {
-                        "type": "chunk",
-                        "content": message_chunk.content,
-                        "temp_id": message_chunk.temp_id
-                    }
-                    yield f"data: {json.dumps(chunk_data)}\n\n"
-                else:
-                    # 最終確定データ
-                    chunk_data = {
-                        "type": "final",
-                        "content": message_chunk.content,
-                        "message_uuid": str(message_chunk.uuid),
-                        "role": message_chunk.role.value
-                    }
-                    final_message = message_chunk
-                    yield f"data: {json.dumps(chunk_data)}\n\n"
-            
-            logger.info(f"Streaming chat completed for chat {chat_uuid}, user {current_user_id}")
+            stream = None
+            try:
+                stream = interaction.continue_chat_stream(req.content)
+                async for message_chunk in stream:
+                    if message_chunk.is_streaming:
+                        # ストリーミング中の部分データ
+                        chunk_data = {
+                            "type": "chunk",
+                            "content": message_chunk.content,
+                            "temp_id": message_chunk.temp_id
+                        }
+                        yield f"data: {json.dumps(chunk_data)}\n\n"
+                    else:
+                        # 最終確定データ
+                        chunk_data = {
+                            "type": "final",
+                            "content": message_chunk.content,
+                            "message_uuid": str(message_chunk.uuid),
+                            "role": message_chunk.role.value
+                        }
+                        final_message = message_chunk
+                        yield f"data: {json.dumps(chunk_data)}\n\n"
+                
+                logger.info(f"Streaming chat completed for chat {chat_uuid}, user {current_user_id}")
+            finally:
+                # ストリーミングリソースの明示的な解放
+                if stream and hasattr(stream, 'aclose'):
+                    try:
+                        await stream.aclose()
+                    except Exception as cleanup_error:
+                        logger.warning(f"Stream cleanup failed: {cleanup_error}")
             
         except ValueError as e:
             # 入力検証エラー

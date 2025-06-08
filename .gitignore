@@ -8,8 +8,16 @@ wheels/
 
 # Virtual environments
 .venv
-.env
 uv.lock
+
+# Environment files
+.env
+.env.*
+*.env
 
 # data
 /data
+*.db
+*.db.backup
+*.sqlite
+*.sqlite3

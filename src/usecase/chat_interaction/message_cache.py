@@ -1,4 +1,5 @@
 import time
+import asyncio
 from collections import OrderedDict
 from typing import Optional
 from ...domain.entity.message_entity import MessageEntity
@@ -15,6 +16,8 @@ class MessageCache:
         self.max_size = max_size
         self.ttl_seconds = ttl_seconds
         self._store: OrderedDict[str, tuple[MessageEntity, float]] = OrderedDict()  # (message, timestamp)
+        self._cleanup_task: Optional[asyncio.Task] = None
+        self._started = False
 
     def get(self, uuid: str) -> Optional[MessageEntity]:
         """メッセージを取得（期限切れの場合はNoneを返す）"""
@@ -79,3 +82,43 @@ class MessageCache:
     def clear(self) -> None:
         """キャッシュをクリア"""
         self._store.clear()
+    
+    def start_auto_cleanup(self) -> None:
+        """自動クリーンアップを開始"""
+        if self._started:
+            return
+        
+        self._started = True
+        self._cleanup_task = asyncio.create_task(self._auto_cleanup_loop())
+    
+    async def stop_auto_cleanup(self) -> None:
+        """自動クリーンアップを停止"""
+        self._started = False
+        if self._cleanup_task:
+            self._cleanup_task.cancel()
+            try:
+                await self._cleanup_task
+            except asyncio.CancelledError:
+                pass
+            self._cleanup_task = None
+    
+    async def _auto_cleanup_loop(self) -> None:
+        """自動クリーンアップのループ処理"""
+        try:
+            while self._started:
+                # 10分間隔でクリーンアップ実行
+                await asyncio.sleep(600)  # 10分 = 600秒
+                if self._started:  # 停止チェック
+                    cleaned_count = self.cleanup_expired()
+                    if cleaned_count > 0:
+                        # ログはロガーを通じて記録すべき
+                        pass  # TODO: logger.info(f"MessageCache: Cleaned {cleaned_count} expired entries")
+        except asyncio.CancelledError:
+            # 正常な停止処理
+            pass
+        except Exception as e:
+            # エラーログはロガーを通じて記録すべき
+            pass  # TODO: logger.error(f"MessageCache auto-cleanup error: {e}")
+            # エラーが発生してもクリーンアップは継続
+            if self._started:
+                self._cleanup_task = asyncio.create_task(self._auto_cleanup_loop())

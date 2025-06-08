@@ -1,9 +1,12 @@
+import asyncio
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
+
 from src.infra.config import Settings
 from src.infra.logging_config import LoggingMiddleware, get_logger
-import asyncio
-from slowapi.errors import RateLimitExceeded
 
 from .routers.chats import router as chats_router
 from .routers.users import router as users_router
@@ -25,7 +28,9 @@ from .rate_limiter import limiter, rate_limit_error_handler
 
 # Initialize settings and logger
 settings = Settings()
-logger = get_logger("app")
+# 本番環境では適切なログレベルを設定する
+log_level = logging.INFO if settings.environment == "production" else logging.DEBUG
+logger = get_logger("app", level=log_level)
 
 app = FastAPI(
     title="Chat LLM Service API",

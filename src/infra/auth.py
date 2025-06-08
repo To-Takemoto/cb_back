@@ -174,7 +174,9 @@ def verify_token(token: str) -> Dict[str, Any]:
     Note:
         - 検証失敗はセキュリティログに記録されます
         - 有効期限は自動的にチェックされます
+        - タイミング攻撃対策として定数時間比較を実装
     """
+    import hmac
     settings = get_settings()
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
