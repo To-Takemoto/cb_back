@@ -1,6 +1,7 @@
 import os
 import json
 import httpx
+import asyncio
 from typing import AsyncGenerator
 from dotenv import load_dotenv
 
@@ -45,7 +46,16 @@ class OpenRouterLLMService:
             "X-Title": "cb_back_local"
         }
         self._client = None
+        self._client_lock = asyncio.Lock()
             
+    async def _ensure_client(self) -> httpx.AsyncClient:
+        """スレッドセーフなクライアント取得"""
+        if self._client is None:
+            async with self._client_lock:
+                if self._client is None:  # ダブルチェックロッキング
+                    self._client = httpx.AsyncClient(timeout=30.0)
+        return self._client
+
     def set_model(self, model_name: str) -> None:
         """
         使用するモデルを設定する
@@ -70,8 +80,7 @@ class OpenRouterLLMService:
             値が設定されません。これらの値はアプリケーション層または
             サービス層で設定する必要があります。
         """
-        if self._client is None:
-            self._client = httpx.AsyncClient(timeout=30.0)
+        client = await self._ensure_client()
 
         message_dict_list = format_api_input.format_entity_list_to_dict_list(messages)
         
@@ -85,7 +94,7 @@ class OpenRouterLLMService:
             "max_tokens": 1000   # デフォルト値
         }
         try:
-            response = await self._client.post(
+            response = await client.post(
                 url, 
                 headers=self.headers, 
                 json=data,
@@ -113,8 +122,7 @@ class OpenRouterLLMService:
         Yields:
             LLMからのストリーミング応答チャンク
         """
-        if self._client is None:
-            self._client = httpx.AsyncClient(timeout=30.0)
+        client = await self._ensure_client()
 
         message_dict_list = format_api_input.format_entity_list_to_dict_list(messages)
         
@@ -130,7 +138,7 @@ class OpenRouterLLMService:
         }
         
         try:
-            async with self._client.stream(
+            async with client.stream(
                 "POST",
                 url,
                 headers=self.headers,
@@ -171,8 +179,7 @@ class OpenRouterLLMService:
         Returns:
             利用可能なモデルのリスト
         """
-        if self._client is None:
-            self._client = httpx.AsyncClient(timeout=30.0)
+        client = await self._ensure_client()
             
         url = f"{self.BASE_URL}{self.MODELS_ENDPOINT}"
         params = {}
@@ -180,7 +187,7 @@ class OpenRouterLLMService:
             params["category"] = category
             
         try:
-            response = await self._client.get(
+            response = await client.get(
                 url,
                 headers=self.headers,
                 params=params

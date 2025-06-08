@@ -48,6 +48,19 @@ class TortoiseUserRepository(UserRepository):
             password=user.password
         )
     
+    async def get_user_by_uuid(self, uuid: str) -> Optional[UserDTO]:
+        """UUIDでユーザーを取得（効率的）"""
+        try:
+            user = await User.get(uuid=uuid)
+            return UserDTO(
+                id=user.id,
+                uuid=user.uuid,
+                name=user.name,
+                password=user.password
+            )
+        except Exception:
+            return None
+
     async def get_all_users(self) -> List[UserDTO]:
         """全ユーザーを取得"""
         users = await User.all()

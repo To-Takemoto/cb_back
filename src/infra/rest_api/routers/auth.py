@@ -79,9 +79,8 @@ async def get_current_user_info(
     current_user_id: str = Depends(get_current_user),
     user_repository: UserRepository = Depends(get_user_repository)
 ):
-    # Get user from database by UUID
-    users = await user_repository.get_all_users()
-    user = next((u for u in users if u.uuid == current_user_id), None)
+    # Get user from database by UUID (効率的)
+    user = await user_repository.get_user_by_uuid(current_user_id)
     
     if not user:
         raise HTTPException(

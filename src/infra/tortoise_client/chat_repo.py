@@ -1,5 +1,4 @@
 import uuid as uuidGen
-import pickle
 from typing import Optional, Tuple, List, Dict, Any
 from datetime import datetime
 
@@ -30,8 +29,8 @@ class TortoiseChatRepository(ChatRepository):
         """メッセージを保存し、MessageEntityを返却"""
         try:
             target_structure = await DiscussionStructure.get(uuid=discussion_structure_uuid)
-        except:
-            raise ValueError(f"Discussion structure not found: {discussion_structure_uuid}")
+        except Exception as e:
+            raise ValueError(f"Discussion structure not found: {discussion_structure_uuid}") from e
         
         # メッセージを作成
         message_uuid = str(uuidGen.uuid4())
@@ -116,8 +115,8 @@ class TortoiseChatRepository(ChatRepository):
             )
             chat_tree.revert_tree_from_bin(discussion.serialized_structure)
             return chat_tree
-        except:
-            raise ValueError(f"Chat tree not found: {uuid}")
+        except Exception as e:
+            raise ValueError(f"Chat tree not found: {uuid}") from e
 
     async def update_tree(self, new_tree: ChatTree) -> None:
         """チャットツリー構造を更新"""
@@ -126,8 +125,8 @@ class TortoiseChatRepository(ChatRepository):
             discussion.serialized_structure = new_tree.get_tree_bin()
             discussion.updated_at = datetime.utcnow()
             await discussion.save()
-        except:
-            raise ValueError(f"Failed to update tree: {new_tree.uuid}")
+        except Exception as e:
+            raise ValueError(f"Failed to update tree: {new_tree.uuid}") from e
 
     async def get_latest_message_by_discussion(self, discussion_uuid: str) -> MessageEntity:
         """指定されたディスカッションの最新メッセージを取得"""
@@ -144,8 +143,8 @@ class TortoiseChatRepository(ChatRepository):
                 role=Role(message.role),
                 content=message.content
             )
-        except:
-            raise ValueError(f"Discussion not found: {discussion_uuid}")
+        except Exception as e:
+            raise ValueError(f"Discussion not found: {discussion_uuid}") from e
 
     async def get_history(self, uuid_list: list[str]) -> list[MessageEntity]:
         """指定されたUUIDリストに対応するメッセージ履歴を取得"""

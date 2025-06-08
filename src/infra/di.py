@@ -1,5 +1,6 @@
 from functools import lru_cache
 from typing import Optional
+import warnings
 from ..usecase.chat_interaction.message_cache import MessageCache
 from .tortoise_client.chat_repo import TortoiseChatRepository
 from .openrouter_client import OpenRouterLLMService
@@ -53,6 +54,12 @@ _container = DIContainer()
 
 def get_chat_repo_client():
     """レガシー関数：認証が必要なエンドポイントでは使用しない"""
+    warnings.warn(
+        "この関数は非推奨です。ハードコードされたuser_idを使用しています。"
+        "create_chat_repo_for_user()を使用してください。",
+        DeprecationWarning,
+        stacklevel=2
+    )
     return TortoiseChatRepository(user_id=1)
 
 async def create_chat_repo_for_user(user_uuid: str) -> ChatRepository:
