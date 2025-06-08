@@ -12,15 +12,15 @@ from ..schemas import (
 from ...tortoise_client.template_repository_adapter import (
     TortoiseTemplateRepositoryAdapter, TortoisePresetRepositoryAdapter
 )
-from ...usecase.template_management.template_service import TemplateService, PresetService
-from ...domain.exception.template_exceptions import (
+from ....usecase.template_management.template_service import TemplateService, PresetService
+from ....domain.exception.template_exceptions import (
     TemplateNotFoundError, TemplateAccessDeniedError, TemplateValidationError,
     PresetNotFoundError, PresetAccessDeniedError, PresetValidationError
 )
 from ...tortoise_client.models import PromptTemplate, ConversationPreset, User
-from ...port.dto.template_dto import PromptTemplateDto, ConversationPresetDto
+from ....port.dto.template_dto import PromptTemplateDto, ConversationPresetDto
 
-router = APIRouter()
+router = APIRouter(prefix="/api/v1/templates", tags=["templates"])
 template_repo = TortoiseTemplateRepositoryAdapter()
 preset_repo = TortoisePresetRepositoryAdapter()
 template_service = TemplateService(template_repo)
@@ -71,7 +71,7 @@ def preset_dto_to_response(preset_dto: ConversationPresetDto) -> PresetResponse:
 
 
 # テンプレート関連のエンドポイント
-@router.post("/templates", response_model=TemplateResponse)
+@router.post("/", response_model=TemplateResponse)
 async def create_template(
     request: TemplateCreateRequest,
     current_user_id: int = Depends(get_current_user_id)
@@ -99,7 +99,7 @@ async def create_template(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/templates", response_model=PaginatedResponse)
+@router.get("/", response_model=PaginatedResponse)
 async def get_templates(
     params: TemplateListParams = Depends(),
     current_user_id: int = Depends(get_current_user_id)
@@ -127,7 +127,7 @@ async def get_templates(
     )
 
 
-@router.get("/templates/{template_uuid}", response_model=TemplateResponse)
+@router.get("/{template_uuid}", response_model=TemplateResponse)
 async def get_template(
     template_uuid: str,
     current_user_id: int = Depends(get_current_user_id)
@@ -142,7 +142,7 @@ async def get_template(
         raise HTTPException(status_code=403, detail="Access denied")
 
 
-@router.put("/templates/{template_uuid}", response_model=TemplateResponse)
+@router.put("/{template_uuid}", response_model=TemplateResponse)
 async def update_template(
     template_uuid: str,
     request: TemplateUpdateRequest,
@@ -172,7 +172,7 @@ async def update_template(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/templates/{template_uuid}")
+@router.delete("/{template_uuid}")
 async def delete_template(
     template_uuid: str,
     current_user_id: int = Depends(get_current_user_id)
@@ -190,7 +190,7 @@ async def delete_template(
         raise HTTPException(status_code=403, detail="Access denied")
 
 
-@router.post("/templates/{template_uuid}/use")
+@router.post("/{template_uuid}/use")
 async def use_template(
     template_uuid: str,
     current_user_id: int = Depends(get_current_user_id)
@@ -208,7 +208,7 @@ async def use_template(
         raise HTTPException(status_code=403, detail="Access denied")
 
 
-@router.get("/templates/categories", response_model=List[str])
+@router.get("/categories", response_model=List[str])
 async def get_template_categories(
     current_user_id: int = Depends(get_current_user_id)
 ):

@@ -58,7 +58,7 @@ app.include_router(auth_router)
 app.include_router(chats_router)
 app.include_router(users_router)
 app.include_router(models_router)
-app.include_router(templates_router, prefix="/api/v1")
+app.include_router(templates_router)
 app.include_router(analytics_router, prefix="/api/v1")
 
 @app.on_event("startup")
