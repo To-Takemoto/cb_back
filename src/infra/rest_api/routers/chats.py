@@ -110,7 +110,7 @@ async def send_message(
     # 新機能: 親メッセージが指定されていれば選択
     if req.parent_message_uuid:
         try:
-            await interaction.select_message(req.parent_message_uuid)
+            interaction.select_message(req.parent_message_uuid)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid parent message UUID")
 
@@ -198,7 +198,7 @@ async def retry_message(
         await interaction.restart_chat(chat_uuid)
         
         # メッセージIDからノードを選択してリトライ
-        await interaction.select_message(message_id)
+        interaction.select_message(message_id)
         msg = await interaction.retry_last_message()
         
         return MessageResponse(
@@ -524,7 +524,7 @@ async def send_message_stream(
             # 親メッセージが指定されている場合は分岐
             if req.parent_message_uuid:
                 try:
-                    await interaction.select_message(req.parent_message_uuid)
+                    interaction.select_message(req.parent_message_uuid)
                 except Exception:
                     error_data = {
                         "type": "error", 

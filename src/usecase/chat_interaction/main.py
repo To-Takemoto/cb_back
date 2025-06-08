@@ -238,6 +238,48 @@ class ChatInteraction:
             response = await interaction.continue_chat("新しい質問")
         """
         self.structure.select_node(message_uuid)
+
+    async def retry_last_message(self) -> MessageEntity:
+        """
+        最後のアシスタントメッセージを再生成する
+        
+        現在の位置から最後のユーザーメッセージを取得し、
+        新しいLLM応答を生成して返します。
+        
+        Returns:
+            MessageEntity: 新しく生成されたアシスタントメッセージ
+            
+        Raises:
+            ValueError: 最後のメッセージがユーザーメッセージでない場合
+            LLMServiceError: LLMサービスとの通信でエラーが発生した場合
+        """
+        try:
+            # 現在のチャット履歴を取得
+            chat_history = await self._get_chat_history()
+            
+            # 最後のメッセージがアシスタントメッセージの場合、その前のユーザーメッセージまで戻る
+            if chat_history and chat_history[-1].role == Role.ASSISTANT:
+                # アシスタントメッセージを除いたヒストリーを取得
+                chat_history = chat_history[:-1]
+            
+            if not chat_history or chat_history[-1].role != Role.USER:
+                raise ValueError("No user message found to retry from")
+            
+            # LLMから新しい応答を取得
+            llm_response = await self.llm_client.complete_message(chat_history)
+            if not llm_response.get("content"):
+                raise LLMServiceError("Empty response from LLM service")
+                
+            # 新しいアシスタントメッセージを生成・保存
+            llm_message_dto = MessageDTO(Role.ASSISTANT, llm_response["content"])
+            llm_message = await self._process_message(llm_message_dto, llm_response)
+            
+            return llm_message
+            
+        except Exception as e:
+            if isinstance(e, (LLMServiceError, ValueError)):
+                raise
+            raise LLMServiceError(f"Failed to retry message: {str(e)}")
         
     async def _get_chat_history(self) -> List[MessageEntity]:
         """
