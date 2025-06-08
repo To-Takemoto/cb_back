@@ -35,15 +35,22 @@ class TitleGenerationService:
             # Create title generation prompt based on conversation language
             title_prompt = self._create_title_prompt(messages)
             
-            # Use Google Gemini 2.0 Flash for cost-effective title generation
+            # Use cost-effective model for title generation
             original_model = getattr(self.llm_client, 'model', None)
-            if hasattr(self.llm_client, 'set_model'):
-                self.llm_client.set_model("google/gemini-2.0-flash-exp")
+            title_generation_model = self._get_title_generation_model()
+            
+            if hasattr(self.llm_client, 'set_model') and title_generation_model:
+                self.llm_client.set_model(title_generation_model)
             
             try:
                 # Make LLM API call for title generation
                 response = await self.llm_client.complete_message([title_prompt])
                 title = self._extract_and_validate_title(response.get("content", ""))
+                
+                # If LLM title generation failed, use fallback
+                if not title:
+                    title = self._fallback_title(messages)
+                
                 return title
             finally:
                 # Restore original model if it was changed
@@ -51,9 +58,33 @@ class TitleGenerationService:
                     self.llm_client.set_model(original_model)
                     
         except Exception as e:
-            logger.warning(f"Title generation failed: {e}")
+            logger.warning(f"Title generation failed: {e}", extra={
+                "error_type": type(e).__name__,
+                "error_details": str(e),
+                "model_used": getattr(self.llm_client, 'model', 'unknown'),
+                "message_count": len(messages)
+            })
             # Fallback to using first user message
             return self._fallback_title(messages)
+    
+    def _get_title_generation_model(self) -> Optional[str]:
+        """
+        Get the best available model for title generation.
+        
+        Returns:
+            Model name for title generation, or None to use default
+        """
+        # List of preferred models for title generation (in order of preference)
+        preferred_models = [
+            "google/gemini-2.0-flash-001",
+            "google/gemini-flash-1.5",
+            "openai/gpt-3.5-turbo",
+            "anthropic/claude-3-haiku-20240307"
+        ]
+        
+        # For now, return the first preferred model
+        # In the future, this could be enhanced to check model availability
+        return preferred_models[0]
     
     def _create_title_prompt(self, messages: List[MessageEntity]) -> MessageEntity:
         """
@@ -155,7 +186,7 @@ Title:"""
         current_length = 0
         
         for msg in messages:
-            role_label = "User" if msg.role == "user" else "Assistant"
+            role_label = "User" if msg.role == Role.USER else "Assistant"
             line = f"{role_label}: {msg.content}"
             
             if current_length + len(line) > max_length:
@@ -221,7 +252,7 @@ Title:"""
             Fallback title or None
         """
         for msg in messages:
-            if msg.role == "user" and msg.content.strip():
+            if msg.role == Role.USER and msg.content.strip():
                 title = msg.content.strip()
                 
                 # Truncate if too long
