@@ -218,7 +218,7 @@ async def get_template_categories(
 
 
 # プリセット関連のエンドポイント
-@router.post("/presets", response_model=PresetResponse)
+@router.post("/presets", response_model=PresetResponse, tags=["presets"])
 async def create_preset(
     request: PresetCreateRequest,
     current_user_id: int = Depends(get_current_user_id)
@@ -240,7 +240,7 @@ async def create_preset(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/presets", response_model=PaginatedResponse)
+@router.get("/presets", response_model=PaginatedResponse, tags=["presets"])
 async def get_presets(
     params: PresetListParams = Depends(),
     current_user_id: int = Depends(get_current_user_id)
@@ -266,7 +266,7 @@ async def get_presets(
     )
 
 
-@router.get("/presets/{preset_uuid}", response_model=PresetResponse)
+@router.get("/presets/{preset_uuid}", response_model=PresetResponse, tags=["presets"])
 async def get_preset(
     preset_uuid: str,
     current_user_id: int = Depends(get_current_user_id)
@@ -281,7 +281,7 @@ async def get_preset(
         raise HTTPException(status_code=403, detail="Access denied")
 
 
-@router.put("/presets/{preset_uuid}", response_model=PresetResponse)
+@router.put("/presets/{preset_uuid}", response_model=PresetResponse, tags=["presets"])
 async def update_preset(
     preset_uuid: str,
     request: PresetUpdateRequest,
@@ -312,7 +312,7 @@ async def update_preset(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/presets/{preset_uuid}")
+@router.delete("/presets/{preset_uuid}", tags=["presets"])
 async def delete_preset(
     preset_uuid: str,
     current_user_id: int = Depends(get_current_user_id)
@@ -330,7 +330,7 @@ async def delete_preset(
         raise HTTPException(status_code=403, detail="Access denied")
 
 
-@router.post("/presets/{preset_uuid}/use")
+@router.post("/presets/{preset_uuid}/use", tags=["presets"])
 async def use_preset(
     preset_uuid: str,
     current_user_id: int = Depends(get_current_user_id)
