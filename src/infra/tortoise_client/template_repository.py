@@ -42,14 +42,20 @@ class TortoiseTemplateRepository:
         """UUIDでテンプレートを取得（ユーザー所有またはパブリック）"""
         try:
             user = await User.get(uuid=user_id)
-            return await PromptTemplate.get(
-                PromptTemplate.uuid == template_uuid
-            ).filter(
-                PromptTemplate.user == user
-            ).get_or_none() or await PromptTemplate.get(
-                PromptTemplate.uuid == template_uuid,
-                PromptTemplate.is_public == True
-            ).get_or_none()
+            # まず最初のクエリを試す（ユーザー所有のテンプレート）
+            first_result = await PromptTemplate.filter(
+                uuid=template_uuid,
+                user=user
+            ).first()
+
+            if first_result:
+                return first_result
+
+            # パブリックテンプレートを検索
+            return await PromptTemplate.filter(
+                uuid=template_uuid,
+                is_public=True
+            ).first()
         except DoesNotExist:
             return None
     

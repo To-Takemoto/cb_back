@@ -11,7 +11,7 @@ from src.infra.tortoise_client.models import (
     User, DiscussionStructure, Message as mm, LLMDetails
 )
 from tortoise import Tortoise
-from src.infra.sqlite_client.chat_repo import ChatRepo
+from src.infra.tortoise_client.chat_repo import TortoiseChatRepository as ChatRepo
 from src.port.dto.message_dto import MessageDTO
 from src.domain.entity.message_entity import Role
 from src.usecase.chat_interaction.main import ChatInteraction

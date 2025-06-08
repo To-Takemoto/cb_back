@@ -7,11 +7,11 @@ LLMDetailsテーブルの活用に関するテスト
 
 import pytest
 from unittest.mock import Mock, patch
-from src.infra.sqlite_client.chat_repo import ChatRepo
-from src.infra.sqlite_client.peewee_models import (
-    User, DiscussionStructure, Message as mm, LLMDetails, db_proxy
+from src.infra.tortoise_client.chat_repo import TortoiseChatRepository as ChatRepo
+from src.infra.tortoise_client.models import (
+    User, DiscussionStructure, Message as mm, LLMDetails
 )
-from peewee import SqliteDatabase
+from tortoise import Tortoise
 from src.port.dto.message_dto import MessageDTO
 from src.domain.entity.message_entity import Role
 import uuid as uuidGen
@@ -19,24 +19,24 @@ import uuid as uuidGen
 
 class TestLLMDetails:
     @pytest.fixture(autouse=True)
-    def setup(self):
+    async def setup(self):
         """各テストの前にデータベースをセットアップ"""
         # テスト用インメモリデータベースを初期化
-        test_db = SqliteDatabase(':memory:')
-        db_proxy.initialize(test_db)
-        
-        test_db.connect()
-        test_db.create_tables([User, DiscussionStructure, mm, LLMDetails])
+        await Tortoise.init(
+            db_url="sqlite://:memory:",
+            modules={"models": ["src.infra.tortoise_client.models"]}
+        )
+        await Tortoise.generate_schemas()
         
         # テストユーザーを作成
-        self.test_user = User.create(
+        self.test_user = await User.create(
             name="testuser",
             uuid=str(uuidGen.uuid4()),
             password="dummy_hash"
         )
         
         # テストチャットを作成
-        self.test_chat = DiscussionStructure.create(
+        self.test_chat = await DiscussionStructure.create(
             user=self.test_user,
             uuid=str(uuidGen.uuid4()),
             serialized_structure=b"",
@@ -46,13 +46,13 @@ class TestLLMDetails:
         yield
         
         # テスト後にクリーンアップ
-        test_db.drop_tables([LLMDetails, mm, DiscussionStructure, User])
-        test_db.close()
+        await Tortoise.close_connections()
     
-    def test_save_message_with_llm_details_for_assistant(self):
+    @pytest.mark.asyncio
+    async def test_save_message_with_llm_details_for_assistant(self):
         """アシスタントメッセージ保存時にLLM詳細情報が保存されることを確認"""
         # Arrange
-        chat_repo = ChatRepo(user_id=self.test_user.uuid)
+        chat_repo = ChatRepo(user_id=self.test_user.id)
         message_dto = MessageDTO(
             role=Role.ASSISTANT,
             content="This is an AI response"
@@ -67,7 +67,7 @@ class TestLLMDetails:
         }
         
         # Act
-        saved_message = chat_repo.save_message(
+        saved_message = await chat_repo.save_message(
             discussion_structure_uuid=self.test_chat.uuid,
             message_dto=message_dto,
             llm_details=llm_details
@@ -89,17 +89,18 @@ class TestLLMDetails:
         assert llm_record.completion_tokens == 30
         assert llm_record.total_tokens == 80
     
-    def test_save_message_without_llm_details_for_user(self):
+    @pytest.mark.asyncio
+    async def test_save_message_without_llm_details_for_user(self):
         """ユーザーメッセージ保存時にLLM詳細情報が保存されないことを確認"""
         # Arrange
-        chat_repo = ChatRepo(user_id=self.test_user.uuid)
+        chat_repo = ChatRepo(user_id=self.test_user.id)
         message_dto = MessageDTO(
             role=Role.USER,
             content="This is a user message"
         )
         
         # Act
-        saved_message = chat_repo.save_message(
+        saved_message = await chat_repo.save_message(
             discussion_structure_uuid=self.test_chat.uuid,
             message_dto=message_dto,
             llm_details=None  # ユーザーメッセージにはLLM詳細なし
@@ -116,10 +117,11 @@ class TestLLMDetails:
         llm_record = await LLMDetails.filter(message=message_record).first()
         assert llm_record is None
     
-    def test_save_message_with_partial_llm_details(self):
+    @pytest.mark.asyncio
+    async def test_save_message_with_partial_llm_details(self):
         """部分的なLLM詳細情報でも適切にデフォルト値で保存されることを確認"""
         # Arrange
-        chat_repo = ChatRepo(user_id=self.test_user.uuid)
+        chat_repo = ChatRepo(user_id=self.test_user.id)
         message_dto = MessageDTO(
             role=Role.ASSISTANT,
             content="AI response with partial details"
@@ -131,7 +133,7 @@ class TestLLMDetails:
         }
         
         # Act
-        saved_message = chat_repo.save_message(
+        saved_message = await chat_repo.save_message(
             discussion_structure_uuid=self.test_chat.uuid,
             message_dto=message_dto,
             llm_details=llm_details
@@ -147,10 +149,11 @@ class TestLLMDetails:
         assert llm_record.completion_tokens == 0  # デフォルト値
         assert llm_record.total_tokens == 0  # デフォルト値
     
-    def test_delete_message_also_deletes_llm_details(self):
+    @pytest.mark.asyncio
+    async def test_delete_message_also_deletes_llm_details(self):
         """メッセージ削除時に関連するLLM詳細情報も削除されることを確認"""
         # Arrange
-        chat_repo = ChatRepo(user_id=self.test_user.uuid)
+        chat_repo = ChatRepo(user_id=self.test_user.id)
         message_dto = MessageDTO(
             role=Role.ASSISTANT,
             content="Message to be deleted"
@@ -163,7 +166,7 @@ class TestLLMDetails:
         }
         
         # メッセージとLLM詳細を保存
-        saved_message = chat_repo.save_message(
+        saved_message = await chat_repo.save_message(
             discussion_structure_uuid=self.test_chat.uuid,
             message_dto=message_dto,
             llm_details=llm_details
@@ -175,7 +178,7 @@ class TestLLMDetails:
         assert llm_record is not None
         
         # Act - メッセージを削除
-        result = chat_repo.delete_message(
+        result = await chat_repo.delete_message(
             chat_uuid=self.test_chat.uuid,
             message_id=saved_message.uuid,
             user_uuid=self.test_user.uuid

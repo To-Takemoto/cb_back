@@ -8,10 +8,10 @@ LLM呼び出し時に適切に使用されることを検証します。
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
 from fastapi.testclient import TestClient
-from src.infra.sqlite_client.peewee_models import (
-    User, DiscussionStructure, Message as mm, LLMDetails, db_proxy
+from src.infra.tortoise_client.models import (
+    User, DiscussionStructure, Message as mm, LLMDetails
 )
-from peewee import SqliteDatabase
+from tortoise import Tortoise
 from src.infra.rest_api.main import app
 from src.infra.rest_api.dependencies import get_current_user
 from src.infra.auth import create_access_token
@@ -21,18 +21,18 @@ import json
 
 class TestSystemPrompt:
     @pytest.fixture(autouse=True)
-    def setup(self):
+    async def setup(self):
         """各テストの前にデータベースをセットアップ"""
         # テスト用インメモリデータベースを初期化
-        test_db = SqliteDatabase(':memory:')
-        db_proxy.initialize(test_db)
-        
-        test_db.connect()
-        test_db.create_tables([User, DiscussionStructure, mm, LLMDetails])
+        await Tortoise.init(
+            db_url="sqlite://:memory:",
+            modules={"models": ["src.infra.tortoise_client.models"]}
+        )
+        await Tortoise.generate_schemas()
         
         # テストユーザーを作成
         self.test_user_id = str(uuidGen.uuid4())
-        self.test_user = User.create(
+        self.test_user = await User.create(
             name="testuser",
             uuid=self.test_user_id,
             password="dummy_hash"
@@ -52,8 +52,7 @@ class TestSystemPrompt:
         
         # テスト後にクリーンアップ
         app.dependency_overrides.clear()
-        test_db.drop_tables([LLMDetails, mm, DiscussionStructure, User])
-        test_db.close()
+        await Tortoise.close_connections()
     
     @pytest.mark.asyncio
     async def test_create_chat_with_system_prompt(self):
@@ -93,7 +92,7 @@ class TestSystemPrompt:
         assert "messages" in data
         
         # データベースでsystem_promptが保存されていることを確認
-        chat = DiscussionStructure.get(DiscussionStructure.uuid == data["chat_id"])
+        chat = await DiscussionStructure.get(uuid=data["chat_id"])
         assert chat.system_prompt == system_prompt
     
     @pytest.mark.asyncio
@@ -128,7 +127,7 @@ class TestSystemPrompt:
         data = response.json()
         
         # system_promptがNullであることを確認
-        chat = DiscussionStructure.get(DiscussionStructure.uuid == data["chat_id"])
+        chat = await DiscussionStructure.get(uuid=data["chat_id"])
         assert chat.system_prompt is None
     
     @pytest.mark.asyncio
@@ -216,7 +215,7 @@ class TestSystemPrompt:
         assert update_response.status_code == 200
         
         # データベースで更新されていることを確認
-        chat = DiscussionStructure.get(DiscussionStructure.uuid == chat_id)
+        chat = await DiscussionStructure.get(uuid=chat_id)
         assert chat.system_prompt == new_system_prompt
     
     @pytest.mark.asyncio

@@ -1,6 +1,6 @@
 def flatten_api_response(llm_response) -> dict:
     """
-    OpenAI APIのレスポンスJSONを、Peeweeの`LLMDetails`モデルに適合する形式に変換する関数
+    OpenAI APIのレスポンスJSONを、Tortoise ORMの`LLMDetails`モデルに適合する形式に変換する関数
     
     Args:
         llm_response: OpenAI APIからのレスポンスJSON

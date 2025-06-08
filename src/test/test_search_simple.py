@@ -88,7 +88,7 @@ def test_search_endpoints_exist():
 
 def test_search_repo_methods():
     """検索用のリポジトリメソッドが実装されていることを確認"""
-    from src.infra.sqlite_client.chat_repo import ChatRepo
+    from src.infra.tortoise_client.chat_repo import TortoiseChatRepository as ChatRepo
     
     # Check methods exist
     assert hasattr(ChatRepo, 'search_messages')

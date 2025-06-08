@@ -90,7 +90,7 @@ def test_current_node_endpoint_exists():
 
 def test_navigation_repo_methods():
     """ナビゲーション用のリポジトリメソッドが実装されていることを確認"""
-    from src.infra.sqlite_client.chat_repo import ChatRepo
+    from src.infra.tortoise_client.chat_repo import TortoiseChatRepository as ChatRepo
     
     # Check methods exist
     assert hasattr(ChatRepo, 'get_recent_chats')

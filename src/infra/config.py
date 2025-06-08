@@ -13,8 +13,7 @@ class Settings(BaseSettings):
     algorithm: str = Field(default="HS256")
     access_token_expire_minutes: int = Field(default=30)
     
-    # Database
-    database_url: str = Field(default="sqlite:///./data/chat_app.db")
+    # Database configuration is now in tortoise_client/config.py
     
     # Environment
     environment: str = Field(default="development")
