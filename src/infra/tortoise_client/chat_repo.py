@@ -162,19 +162,137 @@ class TortoiseChatRepository(ChatRepository):
     # 以下のメソッドは最小限の実装（今回は省略）
     async def get_recent_chats(self, user_uuid: str, limit: int = 10) -> list[dict]:
         """最近のチャット一覧を取得"""
-        return []
+        try:
+            # ユーザーを取得
+            user = await User.get(uuid=user_uuid)
+            
+            # 最近のディスカッションを取得
+            discussions = await DiscussionStructure.filter(user=user).order_by('-updated_at').limit(limit)
+            
+            result = []
+            for discussion in discussions:
+                # 各チャットのメッセージ数を取得
+                message_count = await Message.filter(discussion=discussion).count()
+                
+                # 最初のメッセージを取得してプレビューとして使用
+                first_message = await Message.filter(discussion=discussion).order_by('created_at').first()
+                preview = first_message.content[:100] if first_message else ""
+                
+                result.append({
+                    "uuid": discussion.uuid,
+                    "title": discussion.title or "Untitled Chat",
+                    "preview": preview,
+                    "message_count": message_count,
+                    "created_at": discussion.created_at.isoformat(),
+                    "updated_at": discussion.updated_at.isoformat()
+                })
+            
+            return result
+        except Exception:
+            return []
 
     async def delete_chat(self, chat_uuid: str, user_uuid: str) -> bool:
         """チャットを削除"""
-        return False
+        try:
+            # ユーザーを取得
+            user = await User.get(uuid=user_uuid)
+            
+            # 指定されたユーザーのチャットを取得
+            discussion = await DiscussionStructure.get(uuid=chat_uuid, user=user)
+            
+            # 関連するメッセージとLLM詳細を削除（カスケード削除）
+            await Message.filter(discussion=discussion).delete()
+            
+            # ディスカッション構造を削除
+            await discussion.delete()
+            
+            return True
+        except Exception:
+            return False
 
     async def search_messages(self, chat_uuid: str, query: str) -> list[dict]:
         """メッセージを検索"""
-        return []
+        try:
+            # ディスカッションを取得
+            discussion = await DiscussionStructure.get(uuid=chat_uuid)
+            
+            # メッセージを大文字小文字を区別せずに検索
+            messages = await Message.filter(
+                discussion=discussion,
+                content__icontains=query
+            ).order_by('created_at')
+            
+            result = []
+            for message in messages:
+                result.append({
+                    "uuid": message.uuid,
+                    "role": message.role,
+                    "content": message.content,
+                    "created_at": message.created_at.isoformat()
+                })
+            
+            return result
+        except Exception:
+            return []
 
     async def get_chats_by_date(self, user_uuid: str, date_filter: str) -> list[dict]:
         """日付でフィルタリングしたチャット一覧を取得"""
-        return []
+        try:
+            # ユーザーを取得
+            user = await User.get(uuid=user_uuid)
+            
+            # 日付フィルターに基づいて期間を決定
+            from datetime import date, timedelta
+            today = date.today()
+            
+            if date_filter == "today":
+                start_date = datetime.combine(today, datetime.min.time())
+                end_date = datetime.combine(today, datetime.max.time())
+            elif date_filter == "yesterday":
+                yesterday = today - timedelta(days=1)
+                start_date = datetime.combine(yesterday, datetime.min.time())
+                end_date = datetime.combine(yesterday, datetime.max.time())
+            elif date_filter == "week":
+                week_ago = today - timedelta(days=7)
+                start_date = datetime.combine(week_ago, datetime.min.time())
+                end_date = datetime.combine(today, datetime.max.time())
+            elif date_filter == "month":
+                month_ago = today - timedelta(days=30)
+                start_date = datetime.combine(month_ago, datetime.min.time())
+                end_date = datetime.combine(today, datetime.max.time())
+            else:
+                # 不明なフィルターの場合は今日のデータを返す
+                start_date = datetime.combine(today, datetime.min.time())
+                end_date = datetime.combine(today, datetime.max.time())
+            
+            # 指定期間のディスカッションを取得
+            discussions = await DiscussionStructure.filter(
+                user=user,
+                created_at__gte=start_date,
+                created_at__lte=end_date
+            ).order_by('-created_at')
+            
+            result = []
+            for discussion in discussions:
+                # 各チャットのメッセージ数を取得
+                message_count = await Message.filter(discussion=discussion).count()
+                
+                # 最初のメッセージを取得してプレビューとして使用
+                first_message = await Message.filter(discussion=discussion).order_by('created_at').first()
+                preview = first_message.content[:100] if first_message else ""
+                
+                result.append({
+                    "uuid": discussion.uuid,
+                    "title": discussion.title or "Untitled Chat",
+                    "preview": preview,
+                    "message_count": message_count,
+                    "created_at": discussion.created_at.isoformat(),
+                    "updated_at": discussion.updated_at.isoformat()
+                })
+            
+            return result
+        except Exception:
+            return []
 
     async def get_user_chat_count(self, user_uuid: str) -> int:
         """ユーザーの全チャット数を取得"""
@@ -235,19 +353,117 @@ class TortoiseChatRepository(ChatRepository):
 
     async def update_chat(self, chat_uuid: str, user_uuid: str, title: Optional[str], system_prompt: Optional[str]) -> bool:
         """チャットのタイトルやシステムプロンプトを更新"""
-        return False
+        try:
+            # ユーザーを取得
+            user = await User.get(uuid=user_uuid)
+            
+            # 指定されたユーザーのチャットを取得
+            discussion = await DiscussionStructure.get(uuid=chat_uuid, user=user)
+            
+            # フィールドを更新
+            if title is not None:
+                discussion.title = title
+            if system_prompt is not None:
+                discussion.system_prompt = system_prompt
+            
+            # 更新日時を設定
+            discussion.updated_at = datetime.utcnow()
+            
+            # 保存
+            await discussion.save()
+            
+            return True
+        except Exception:
+            return False
 
     async def edit_message(self, chat_uuid: str, message_id: str, user_uuid: str, content: str) -> bool:
         """メッセージの内容を編集"""
-        return False
+        try:
+            # ユーザーを取得
+            user = await User.get(uuid=user_uuid)
+            
+            # ディスカッションを取得（ユーザー権限チェック）
+            discussion = await DiscussionStructure.get(uuid=chat_uuid, user=user)
+            
+            # メッセージを取得
+            message = await Message.get(uuid=message_id, discussion=discussion)
+            
+            # 内容を更新
+            message.content = content
+            await message.save()
+            
+            return True
+        except Exception:
+            return False
 
     async def delete_message(self, chat_uuid: str, message_id: str, user_uuid: str) -> bool:
         """メッセージを削除"""
-        return False
+        try:
+            # ユーザーを取得
+            user = await User.get(uuid=user_uuid)
+            
+            # ディスカッションを取得（ユーザー権限チェック）
+            discussion = await DiscussionStructure.get(uuid=chat_uuid, user=user)
+            
+            # メッセージを取得
+            message = await Message.get(uuid=message_id, discussion=discussion)
+            
+            # メッセージを削除
+            await message.delete()
+            
+            return True
+        except Exception:
+            return False
 
     async def search_and_paginate_chats(self, user_uuid: str, query: Optional[str], sort: Optional[str], limit: int, offset: int) -> dict:
         """チャットを検索・ソート・ページネーションで取得"""
-        return {"items": [], "total": 0}
+        try:
+            # ユーザーを取得
+            user = await User.get(uuid=user_uuid)
+            
+            # ベースクエリを構築
+            base_query = DiscussionStructure.filter(user=user)
+            
+            # 検索クエリが指定されている場合
+            if query:
+                base_query = base_query.filter(title__icontains=query)
+            
+            # ソート順を決定（デフォルトは更新日時の降順）
+            sort_field = "-updated_at"  # デフォルト
+            if sort == "created_at":
+                sort_field = "-created_at"
+            elif sort == "title":
+                sort_field = "title"
+            elif sort == "-title":
+                sort_field = "-title"
+            
+            # 総数を取得
+            total = await base_query.count()
+            
+            # ページネーションを適用してディスカッションを取得
+            discussions = await base_query.order_by(sort_field).offset(offset).limit(limit)
+            
+            result = []
+            for discussion in discussions:
+                # 各チャットのメッセージ数を取得
+                message_count = await Message.filter(discussion=discussion).count()
+                
+                # 最初のメッセージを取得してプレビューとして使用
+                first_message = await Message.filter(discussion=discussion).order_by('created_at').first()
+                preview = first_message.content[:100] if first_message else ""
+                
+                result.append({
+                    "uuid": discussion.uuid,
+                    "title": discussion.title or "Untitled Chat",
+                    "preview": preview,
+                    "message_count": message_count,
+                    "created_at": discussion.created_at.isoformat(),
+                    "updated_at": discussion.updated_at.isoformat()
+                })
+            
+            return {"items": result, "total": total}
+        except Exception:
+            return {"items": [], "total": 0}
 
     async def get_tree_structure(self, chat_uuid: str) -> dict:
         """

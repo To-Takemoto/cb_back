@@ -23,8 +23,8 @@ class TestChatUnimplementedFeatures:
         # テスト用ユーザーを作成
         user = await User.create(
             uuid=str(uuidGen.uuid4()),
-            username="testuser",
-            password_hash="hashed_password"
+            name="testuser",
+            password="hashed_password"
         )
         
         # テスト用ディスカッション構造を作成
@@ -70,7 +70,7 @@ class TestChatUnimplementedFeatures:
 
     async def test_delete_chat_success(self, setup_db_with_data):
         """チャット削除機能のテスト - 成功ケース（現在は失敗する）"""
-        data = await setup_db_with_data
+        data = setup_db_with_data
         user = data["user"]
         discussion = data["discussion"]
         repo = data["repo"]
@@ -87,7 +87,7 @@ class TestChatUnimplementedFeatures:
 
     async def test_update_chat_success(self, setup_db_with_data):
         """チャット更新機能のテスト - 成功ケース（現在は失敗する）"""
-        data = await setup_db_with_data
+        data = setup_db_with_data
         user = data["user"]
         discussion = data["discussion"]
         repo = data["repo"]
@@ -108,7 +108,7 @@ class TestChatUnimplementedFeatures:
 
     async def test_search_messages_success(self, setup_db_with_data):
         """メッセージ検索機能のテスト - 成功ケース（現在は失敗する）"""
-        data = await setup_db_with_data
+        data = setup_db_with_data
         discussion = data["discussion"]
         message1 = data["message1"]
         repo = data["repo"]
@@ -123,7 +123,7 @@ class TestChatUnimplementedFeatures:
 
     async def test_edit_message_success(self, setup_db_with_data):
         """メッセージ編集機能のテスト - 成功ケース（現在は失敗する）"""
-        data = await setup_db_with_data
+        data = setup_db_with_data
         user = data["user"]
         discussion = data["discussion"]
         message1 = data["message1"]
@@ -144,7 +144,7 @@ class TestChatUnimplementedFeatures:
 
     async def test_delete_message_success(self, setup_db_with_data):
         """メッセージ削除機能のテスト - 成功ケース（現在は失敗する）"""
-        data = await setup_db_with_data
+        data = setup_db_with_data
         user = data["user"]
         discussion = data["discussion"]
         message1 = data["message1"]
@@ -159,3 +159,62 @@ class TestChatUnimplementedFeatures:
         
         # 削除が成功することを期待
         assert result is True
+
+    async def test_search_and_paginate_chats_success(self, setup_db_with_data):
+        """チャット検索・ページネーション機能のテスト - 成功ケース（現在は失敗する）"""
+        data = setup_db_with_data
+        user = data["user"]
+        repo = data["repo"]
+        
+        # 追加のテストチャットを作成
+        discussion2 = await DiscussionStructure.create(
+            user=user,
+            uuid=str(uuidGen.uuid4()),
+            title="Another Test Chat",
+            system_prompt=None,
+            serialized_structure=b"test_tree_data2",
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        
+        # 検索・ページネーション（現在の実装は空結果を返す）
+        result = await repo.search_and_paginate_chats(
+            user.uuid, 
+            query="Test", 
+            sort="updated_at", 
+            limit=10, 
+            offset=0
+        )
+        
+        # 結果が返されることを期待
+        assert result["total"] == 2
+        assert len(result["items"]) == 2
+
+    async def test_get_chats_by_date_today(self, setup_db_with_data):
+        """日付フィルタリング機能のテスト - 今日の日付（現在は失敗する）"""
+        data = setup_db_with_data
+        user = data["user"]
+        discussion = data["discussion"]
+        repo = data["repo"]
+        
+        # 今日のチャットを取得（現在の実装は空リストを返す）
+        results = await repo.get_chats_by_date(user.uuid, "today")
+        
+        # 結果が返されることを期待
+        assert len(results) == 1
+        assert results[0]["uuid"] == discussion.uuid
+
+    async def test_get_recent_chats_success(self, setup_db_with_data):
+        """最近のチャット一覧取得機能のテスト - 非ページネーション版（現在は失敗する）"""
+        data = setup_db_with_data
+        user = data["user"]
+        discussion = data["discussion"]
+        repo = data["repo"]
+        
+        # 最近のチャットを取得（現在の実装は空リストを返す）
+        results = await repo.get_recent_chats(user.uuid, limit=5)
+        
+        # 結果が返されることを期待
+        assert len(results) == 1
+        assert results[0]["uuid"] == discussion.uuid
+        assert results[0]["title"] == "Test Chat"
