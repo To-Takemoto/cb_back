@@ -7,6 +7,8 @@ from ...domain.entity.chat_tree import ChatTree, ChatStructure
 from ...domain.entity.message_entity import MessageEntity, Role
 from ...port.dto.message_dto import MessageDTO
 from ...port.chat_repo import ChatRepository
+from ...port.llm_client import LLMClient
+from ...usecase.chat_interaction.title_generation import TitleGenerationService
 from .models import User, DiscussionStructure, Message, LLMDetails
 
 
@@ -302,6 +304,39 @@ class TortoiseChatRepository(ChatRepository):
             return count
         except Exception:
             return 0
+    
+    async def generate_chat_title(self, chat_uuid: str, messages: List[MessageEntity], llm_client: LLMClient) -> Optional[str]:
+        """
+        Generate and save a title for the specified chat using LLM.
+        
+        Args:
+            chat_uuid: UUID of the chat to generate title for
+            messages: List of messages in the conversation
+            llm_client: LLM client for title generation
+            
+        Returns:
+            Generated title or None if generation fails
+        """
+        try:
+            # Create title generation service
+            title_service = TitleGenerationService(llm_client)
+            
+            # Generate title using LLM
+            generated_title = await title_service.generate_title(messages)
+            
+            if generated_title:
+                # Update the discussion with the generated title
+                await DiscussionStructure.filter(uuid=chat_uuid).update(title=generated_title)
+                return generated_title
+            
+            return None
+            
+        except Exception as e:
+            # Log error but don't raise - title generation failure shouldn't break chat
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to generate title for chat {chat_uuid}: {e}")
+            return None
 
     async def get_recent_chats_paginated(self, user_uuid: str, limit: int, offset: int) -> list[dict]:
         """ページネーションでチャット一覧を取得"""

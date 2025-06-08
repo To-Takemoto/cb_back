@@ -109,6 +109,10 @@ class ChatInteraction:
                 
             llm_message_dto = MessageDTO(Role.ASSISTANT, llm_response["content"])
             llm_message = await self._process_message(llm_message_dto, llm_response)
+            
+            # Generate title automatically after first assistant response
+            await self._try_generate_title(chat_history, llm_message)
+            
             return llm_message
         except Exception as e:
             if isinstance(e, (LLMServiceError, ValueError)):
@@ -182,6 +186,9 @@ class ChatInteraction:
             # LLM詳細情報は現在のチャンクから構築（簡略化）
             llm_details = {"content": accumulated_content}
             final_message = await self._process_message(llm_message_dto, llm_details)
+            
+            # Generate title automatically after first assistant response
+            await self._try_generate_title(chat_history, final_message)
             
             # 最終確定メッセージを配信
             yield final_message
@@ -278,3 +285,31 @@ class ChatInteraction:
         new_tree = self.structure.get_chat_tree()
         await self.chat_repo.update_tree(new_tree)
         return message_entity
+    
+    async def _try_generate_title(self, chat_history: List[MessageEntity], assistant_message: MessageEntity) -> None:
+        """
+        Try to generate a title for the chat if this is the first assistant response.
+        
+        Args:
+            chat_history: Current chat history before the new assistant message
+            assistant_message: The newly generated assistant message
+        """
+        try:
+            # Check if this is the first assistant response (title generation trigger)
+            # chat_history doesn't include the new assistant message yet
+            assistant_messages = [msg for msg in chat_history if msg.role == Role.ASSISTANT]
+            
+            # Generate title only for the first assistant response (so assistant_messages should be empty)
+            if len(assistant_messages) == 0:
+                # Get all messages including the new one for title generation
+                all_messages = chat_history + [assistant_message]
+                
+                # Generate title using the chat repository method
+                chat_uuid = self.structure.get_uuid()
+                await self.chat_repo.generate_chat_title(chat_uuid, all_messages, self.llm_client)
+                
+        except Exception as e:
+            # Title generation is not critical - log but don't raise
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Title generation failed: {e}")
