@@ -41,6 +41,8 @@ class StructureHandle:
             raise MessageNotFoundError(message_uuid)
         
     def get_uuid(self) -> str:
+        if self.chat_tree is None:
+            raise InvalidTreeStructureError("No tree loaded")
         return self.chat_tree.uuid
     
     def get_chat_tree(self) -> ChatStructure:

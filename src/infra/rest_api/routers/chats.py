@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from typing import Optional
 import asyncio
@@ -6,9 +6,10 @@ import json
 
 from ..dependencies import get_message_cache_dependency, get_llm_client_dependency
 from ....usecase.model_management.model_service import ModelManagementService
+from src.infra.logging_config import get_logger
+from ..rate_limiter import limiter
 from src.infra.di import create_chat_repo_for_user
 from src.usecase.chat_interaction.main import ChatInteraction
-from src.infra.logging_config import get_logger
 from ..schemas import (
     ChatCreateRequest, ChatCreateResponse,
     MessageRequest, MessageResponse,
@@ -32,7 +33,9 @@ def get_model_service(llm_client = Depends(get_llm_client_dependency)) -> ModelM
     return ModelManagementService(llm_client)
 
 @router.post("/", response_model=ChatCreateResponse)
+@limiter.limit("10/minute")
 async def create_chat(
+    request: Request,
     req: ChatCreateRequest,
     current_user_id: str = Depends(get_current_user),
     model_service: ModelManagementService = Depends(get_model_service)
@@ -69,7 +72,9 @@ async def create_chat(
     return ChatCreateResponse(chat_uuid=str(interaction.structure.get_uuid()))
 
 @router.post("/{chat_uuid}/messages", response_model=MessageResponse)
+@limiter.limit("20/minute")
 async def send_message(
+    request: Request,
     chat_uuid: str,
     req: MessageRequest,
     current_user_id: str = Depends(get_current_user),
@@ -134,7 +139,9 @@ async def send_message(
     return MessageResponse(**response_data)
 
 @router.get("/{chat_uuid}/messages", response_model=HistoryResponse)
+@limiter.limit("30/minute")
 async def get_history(
+    request: Request,
     chat_uuid: str,
     current_user_id: str = Depends(get_current_user),
     llm_client = Depends(get_llm_client_dependency),
@@ -180,7 +187,9 @@ async def get_history(
 
 
 @router.post("/{chat_uuid}/messages/{message_id}/retry", response_model=MessageResponse)
+@limiter.limit("15/minute")
 async def retry_message(
+    request: Request,
     chat_uuid: str,
     message_id: str,
     current_user_id: str = Depends(get_current_user),

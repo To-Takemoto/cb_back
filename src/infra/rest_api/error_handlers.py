@@ -222,7 +222,7 @@ async def handle_generic_error(request: Request, exc: Exception):
     return create_error_response(
         error_type="internal_error",
         user_message="予期しないエラーが発生しました。問題が続く場合はサポートにお問い合わせください。",
-        detail=str(exc) if request.app.debug else None,
+        detail=None,
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         retry_available=True
     )

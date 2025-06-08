@@ -7,7 +7,6 @@ from ...domain.entity.message_entity import MessageEntity, Role
 from ...port.dto.message_dto import MessageDTO
 from ...port.chat_repo import ChatRepository
 from ...port.llm_client import LLMClient
-from ...usecase.chat_interaction.title_generation import TitleGenerationService
 from .models import User, DiscussionStructure, Message, LLMDetails
 
 
@@ -167,16 +166,17 @@ class TortoiseChatRepository(ChatRepository):
             # ユーザーを取得
             user = await User.get(uuid=user_uuid)
             
-            # 最近のディスカッションを取得
-            discussions = await DiscussionStructure.filter(user=user).order_by('-updated_at').limit(limit)
+            # 最近のディスカッションを取得（メッセージとカウントを一度にフェッチ）
+            discussions = await DiscussionStructure.filter(user=user).order_by('-updated_at').limit(limit).prefetch_related('messages')
             
             result = []
             for discussion in discussions:
-                # 各チャットのメッセージ数を取得
-                message_count = await Message.filter(discussion=discussion).count()
+                # プリフェッチしたメッセージから情報を取得
+                messages = discussion.messages
+                message_count = len(messages)
                 
                 # 最初のメッセージを取得してプレビューとして使用
-                first_message = await Message.filter(discussion=discussion).order_by('created_at').first()
+                first_message = min(messages, key=lambda m: m.created_at) if messages else None
                 preview = first_message.content[:100] if first_message else ""
                 
                 result.append({
@@ -266,20 +266,21 @@ class TortoiseChatRepository(ChatRepository):
                 start_date = datetime.combine(today, datetime.min.time())
                 end_date = datetime.combine(today, datetime.max.time())
             
-            # 指定期間のディスカッションを取得
+            # 指定期間のディスカッションを取得（メッセージを一度にフェッチ）
             discussions = await DiscussionStructure.filter(
                 user=user,
                 created_at__gte=start_date,
                 created_at__lte=end_date
-            ).order_by('-created_at')
+            ).order_by('-created_at').prefetch_related('messages')
             
             result = []
             for discussion in discussions:
-                # 各チャットのメッセージ数を取得
-                message_count = await Message.filter(discussion=discussion).count()
+                # プリフェッチしたメッセージから情報を取得
+                messages = discussion.messages
+                message_count = len(messages)
                 
                 # 最初のメッセージを取得してプレビューとして使用
-                first_message = await Message.filter(discussion=discussion).order_by('created_at').first()
+                first_message = min(messages, key=lambda m: m.created_at) if messages else None
                 preview = first_message.content[:100] if first_message else ""
                 
                 result.append({
@@ -317,6 +318,9 @@ class TortoiseChatRepository(ChatRepository):
             Generated title or None if generation fails
         """
         try:
+            # Import TitleGenerationService dynamically to avoid circular dependency
+            from ...usecase.chat_interaction.title_generation import TitleGenerationService
+            
             # Create title generation service
             title_service = TitleGenerationService(llm_client)
             

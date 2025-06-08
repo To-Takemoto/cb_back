@@ -2,6 +2,12 @@
 親メッセージ指定機能の簡単な動作テスト
 """
 import pytest
+import sys
+import os
+
+# Add path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+
 from src.infra.rest_api.schemas import MessageRequest, MessageResponse
 
 
@@ -13,9 +19,9 @@ def test_schema_compatibility():
     assert old_request.parent_message_uuid is None
     
     # 新しいリクエスト
-    new_request = MessageRequest(content="Hello", parent_message_uuid="some-uuid")
+    new_request = MessageRequest(content="Hello", parent_message_uuid="123e4567-e89b-12d3-a456-426614174000")
     assert new_request.content == "Hello"
-    assert new_request.parent_message_uuid == "some-uuid"
+    assert new_request.parent_message_uuid == "123e4567-e89b-12d3-a456-426614174000"
     
     # 既存のレスポンス（後方互換性）
     old_response = MessageResponse(message_uuid="msg-1", content="Response")

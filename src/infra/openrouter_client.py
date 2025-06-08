@@ -239,3 +239,11 @@ class OpenRouterLLMService:
         if self._client is not None:
             await self._client.aclose()
             self._client = None
+    
+    async def __aenter__(self):
+        """非同期コンテキストマネージャーのエントリー"""
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """非同期コンテキストマネージャーの終了時にリソースをクリーンアップ"""
+        await self.aclose()
