@@ -2,14 +2,20 @@
 Test for template implementation
 """
 import pytest
+import sys
+import os
 from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock
+
+# Add path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+
 from src.domain.entity.template_entity import PromptTemplate, ConversationPreset
 from src.domain.exception.template_exceptions import (
     TemplateValidationError, PresetValidationError
 )
 from src.port.dto.template_dto import PromptTemplateDto, ConversationPresetDto
 from src.usecase.template_management.template_service import TemplateService, PresetService
-from unittest.mock import AsyncMock, MagicMock
 
 
 class TestPromptTemplateEntity:
